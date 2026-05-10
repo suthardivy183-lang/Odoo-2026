@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 interface SharedActivity {
   id: string;
@@ -50,10 +51,17 @@ const fmt = (d: string) =>
   new Date(d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 
 export default function SharePage() {
-  const { slug } = useParams<{ slug: string }>();
-  const [trip,  setTrip]   = useState<SharedTrip | null>(null);
-  const [error, setError]  = useState('');
+  const { slug }         = useParams<{ slug: string }>();
+  const { user }         = useAuth();
+  const navigate         = useNavigate();
+
+  const [trip, setTrip]   = useState<SharedTrip | null>(null);
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+
+  const [copying, setCopying]   = useState(false);
+  const [copyDone, setCopyDone] = useState(false);
+  const [urlCopied, setUrlCopied] = useState(false);
 
   useEffect(() => {
     api.get(`/api/public/trips/${slug}`)
@@ -61,6 +69,36 @@ export default function SharePage() {
       .catch(e => setError(e.response?.data?.message || 'Trip not found'))
       .finally(() => setLoading(false));
   }, [slug]);
+
+  const pageUrl = window.location.href;
+
+  const handleCopyUrl = async () => {
+    await navigator.clipboard.writeText(pageUrl);
+    setUrlCopied(true);
+    setTimeout(() => setUrlCopied(false), 2000);
+  };
+
+  const handleCopyTrip = async () => {
+    if (!user) { navigate(`/signup?redirect=${encodeURIComponent(window.location.pathname)}`); return; }
+    setCopying(true);
+    try {
+      const res = await api.post(`/api/public/trips/${slug}/copy`);
+      setCopyDone(true);
+      setTimeout(() => navigate(`/trips/${res.data.data.trip.id}`), 1200);
+    } catch {
+      setCopying(false);
+    }
+  };
+
+  const shareWhatsApp = () => {
+    const text = trip ? `Check out this trip: ${trip.name} 🌍\n${pageUrl}` : pageUrl;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+  };
+
+  const shareTwitter = () => {
+    const text = trip ? `Planning a trip: ${trip.name} via @Traveloop` : 'Check out this trip!';
+    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(pageUrl)}`, '_blank');
+  };
 
   if (loading) {
     return (
@@ -75,9 +113,7 @@ export default function SharePage() {
       <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4 text-center">
         <p className="text-6xl mb-4">😕</p>
         <h2 className="text-xl font-semibold text-gray-700">{error || 'Trip not found'}</h2>
-        <p className="text-sm text-gray-500 mt-2">
-          The link may be broken or the trip is no longer public.
-        </p>
+        <p className="text-sm text-gray-500 mt-2">The link may be broken or the trip is no longer public.</p>
         <Link to="/" className="mt-5 text-indigo-600 hover:underline text-sm">Go to Traveloop</Link>
       </div>
     );
@@ -87,18 +123,79 @@ export default function SharePage() {
     .flatMap(s => s.activities)
     .reduce((s, a) => s + Number(a.effective_cost || 0), 0);
 
+  const totalActivities = trip.stops.reduce((s, x) => s + x.activities.length, 0);
+
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Slim public header */}
-      <header className="bg-white border-b border-gray-200">
+      {/* Header */}
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
         <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
           <Link to="/" className="text-xl font-bold text-indigo-600">Traveloop</Link>
-          <span className="text-xs text-gray-400">Public itinerary · view only</span>
+          <div className="flex items-center gap-3">
+            <span className="hidden sm:block text-xs text-gray-400">Public itinerary · view only</span>
+            {user ? (
+              <Link to="/dashboard" className="text-sm text-indigo-600 hover:underline font-medium">My Trips →</Link>
+            ) : (
+              <Link to="/signup" className="text-sm px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium">
+                Sign up free
+              </Link>
+            )}
+          </div>
         </div>
       </header>
 
       <main className="max-w-4xl mx-auto px-4 py-8">
-        {/* Trip header */}
+
+        {/* Social share bar */}
+        <div className="flex flex-wrap items-center gap-2 mb-5">
+          <span className="text-xs text-gray-500 font-medium mr-1">Share:</span>
+
+          <button
+            onClick={handleCopyUrl}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-300 rounded-lg hover:bg-gray-50 transition text-gray-700"
+          >
+            {urlCopied ? '✓ Copied!' : '🔗 Copy link'}
+          </button>
+
+          <button
+            onClick={shareWhatsApp}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-green-300 rounded-lg hover:bg-green-50 transition text-green-700"
+          >
+            💬 WhatsApp
+          </button>
+
+          <button
+            onClick={shareTwitter}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-sky-300 rounded-lg hover:bg-sky-50 transition text-sky-700"
+          >
+            𝕏 Twitter
+          </button>
+
+          <div className="ml-auto">
+            <button
+              onClick={handleCopyTrip}
+              disabled={copying || copyDone}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition ${
+                copyDone
+                  ? 'bg-green-600 text-white'
+                  : 'bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-60'
+              }`}
+            >
+              {copyDone ? '✓ Copied to your trips!' : copying ? 'Copying…' : '📋 Copy this trip'}
+            </button>
+          </div>
+        </div>
+
+        {!user && (
+          <div className="mb-5 px-4 py-3 bg-indigo-50 border border-indigo-100 rounded-xl text-sm text-indigo-700 flex items-center justify-between gap-3">
+            <span>Want to plan a similar trip? Copy this itinerary to your account.</span>
+            <Link to={`/signup?redirect=${encodeURIComponent(window.location.pathname)}`} className="font-semibold underline whitespace-nowrap">
+              Sign up free →
+            </Link>
+          </div>
+        )}
+
+        {/* Trip header card */}
         <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden mb-6">
           {trip.cover_photo && (
             <div className="h-48 sm:h-60 overflow-hidden">
@@ -121,15 +218,11 @@ export default function SharePage() {
               </div>
               <div>
                 <p className="text-xs text-gray-400">Activities</p>
-                <p className="text-lg font-semibold text-gray-800">
-                  {trip.stops.reduce((s, x) => s + x.activities.length, 0)}
-                </p>
+                <p className="text-lg font-semibold text-gray-800">{totalActivities}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-400">Activity cost</p>
-                <p className="text-lg font-semibold text-gray-800">
-                  ${totalActivityCost.toLocaleString()}
-                </p>
+                <p className="text-lg font-semibold text-gray-800">${totalActivityCost.toLocaleString()}</p>
               </div>
             </div>
           </div>
@@ -152,7 +245,9 @@ export default function SharePage() {
                     <div className="w-8 h-8 rounded-full bg-indigo-600 text-white text-sm font-bold flex items-center justify-center">
                       {idx + 1}
                     </div>
-                    {idx < trip.stops.length - 1 && <div className="w-px flex-1 bg-gray-200 my-2" style={{ minHeight: '40px' }} />}
+                    {idx < trip.stops.length - 1 && (
+                      <div className="w-px flex-1 bg-gray-200 my-2" style={{ minHeight: '40px' }} />
+                    )}
                   </div>
 
                   <div className="flex-1 min-w-0">
@@ -194,7 +289,20 @@ export default function SharePage() {
           </div>
         )}
 
-        <p className="text-center text-xs text-gray-400 mt-8">
+        {/* CTA footer */}
+        <div className="mt-10 bg-indigo-600 rounded-2xl p-6 text-center text-white">
+          <p className="text-lg font-bold mb-1">Inspired by this trip?</p>
+          <p className="text-sm text-indigo-200 mb-4">Copy it to your account and make it your own.</p>
+          <button
+            onClick={handleCopyTrip}
+            disabled={copying || copyDone}
+            className="inline-flex items-center gap-2 px-6 py-2.5 bg-white text-indigo-700 font-semibold rounded-xl hover:bg-indigo-50 transition disabled:opacity-60"
+          >
+            {copyDone ? '✓ Trip copied!' : copying ? 'Copying…' : '📋 Copy this trip'}
+          </button>
+        </div>
+
+        <p className="text-center text-xs text-gray-400 mt-6">
           Plan your own trip on{' '}
           <Link to="/signup" className="text-indigo-600 hover:underline font-medium">Traveloop</Link>
         </p>

@@ -205,3 +205,68 @@ export const deleteTrip = async (id: string, userId: string) => {
   );
   if (!rowCount) throw notFound();
 };
+
+export const copyPublicTrip = async (slug: string, userId: string) => {
+  const { rows } = await pool.query(
+    `SELECT t.id, t.name, t.description, t.start_date, t.end_date, t.total_budget
+     FROM trips t
+     WHERE t.public_slug = $1 AND t.is_public = TRUE`,
+    [slug]
+  );
+  if (!rows[0]) throw notFound('Trip not found or not public');
+  const src = rows[0];
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const newTrip = await client.query(
+      `INSERT INTO trips (user_id, name, description, start_date, end_date, total_budget, status)
+       VALUES ($1, $2, $3, $4, $5, $6, 'draft')
+       RETURNING id, name, start_date, end_date`,
+      [userId, `Copy of ${src.name}`, src.description, src.start_date, src.end_date, src.total_budget]
+    );
+    const newTripId = newTrip.rows[0].id;
+
+    // Copy budget row
+    await client.query(
+      `INSERT INTO trip_budgets (trip_id) VALUES ($1) ON CONFLICT DO NOTHING`,
+      [newTripId]
+    );
+
+    const { rows: stops } = await client.query(
+      `SELECT ts.id, ts.city_id, ts.arrival_date, ts.departure_date, ts.notes, ts.stop_order
+       FROM trip_stops ts WHERE ts.trip_id = $1 ORDER BY ts.stop_order`,
+      [src.id]
+    );
+
+    for (const stop of stops) {
+      const newStop = await client.query(
+        `INSERT INTO trip_stops (trip_id, city_id, arrival_date, departure_date, notes, stop_order)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+        [newTripId, stop.city_id, stop.arrival_date, stop.departure_date, stop.notes, stop.stop_order]
+      );
+      const newStopId = newStop.rows[0].id;
+
+      const { rows: acts } = await client.query(
+        `SELECT activity_id, scheduled_date, scheduled_time, custom_cost FROM stop_activities WHERE stop_id = $1`,
+        [stop.id]
+      );
+      for (const act of acts) {
+        await client.query(
+          `INSERT INTO stop_activities (stop_id, activity_id, scheduled_date, scheduled_time, custom_cost)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [newStopId, act.activity_id, act.scheduled_date, act.scheduled_time, act.custom_cost]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+    return newTrip.rows[0];
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+};
