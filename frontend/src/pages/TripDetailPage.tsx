@@ -90,6 +90,7 @@ export default function TripDetailPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr]     = useState('');
 
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
   const [stopModalOpen, setStopModalOpen]         = useState(false);
   const [activityModalStop, setActivityModalStop] = useState<Stop | null>(null);
   const [savingShare, setSavingShare] = useState(false);
@@ -386,15 +387,32 @@ export default function TripDetailPage() {
           </div>
         )}
 
-        {/* Itinerary */}
+        {/* Itinerary header + view toggle */}
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-gray-800">Itinerary</h2>
-          <button
-            onClick={() => setStopModalOpen(true)}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition"
-          >
-            + Add Stop
-          </button>
+          <div className="flex items-center gap-2">
+            {/* View toggle */}
+            <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden text-xs font-medium">
+              <button
+                onClick={() => setViewMode('list')}
+                className={`px-3 py-1.5 transition ${viewMode === 'list' ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+              >
+                ☰ List
+              </button>
+              <button
+                onClick={() => setViewMode('calendar')}
+                className={`px-3 py-1.5 transition ${viewMode === 'calendar' ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+              >
+                📅 Calendar
+              </button>
+            </div>
+            <button
+              onClick={() => setStopModalOpen(true)}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition"
+            >
+              + Add Stop
+            </button>
+          </div>
         </div>
 
         {stops.length === 0 && (
@@ -405,77 +423,90 @@ export default function TripDetailPage() {
           </div>
         )}
 
-        {/* Timeline */}
-        <div className="space-y-4">
-          {stops.map((stop, idx) => (
-            <div key={stop.id} className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-              <div className="flex items-start gap-4 p-5">
-                <div className="flex flex-col items-center">
-                  <div className="w-8 h-8 rounded-full bg-indigo-600 text-white text-sm font-bold flex items-center justify-center">
-                    {idx + 1}
-                  </div>
-                  {idx < stops.length - 1 && <div className="w-px flex-1 bg-gray-200 my-2" style={{ minHeight: '40px' }} />}
-                </div>
-
-                <div className="flex-1">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h3 className="font-semibold text-gray-800">
-                        {stop.city_name}<span className="text-gray-400">, {stop.country}</span>
-                      </h3>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        {fmtDate(stop.arrival_date)} → {fmtDate(stop.departure_date)}
-                      </p>
+        {/* LIST VIEW — timeline grouped by stop */}
+        {viewMode === 'list' && (
+          <div className="space-y-4">
+            {stops.map((stop, idx) => (
+              <div key={stop.id} className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+                <div className="flex items-start gap-4 p-5">
+                  <div className="flex flex-col items-center">
+                    <div className="w-8 h-8 rounded-full bg-indigo-600 text-white text-sm font-bold flex items-center justify-center">
+                      {idx + 1}
                     </div>
-                    <button
-                      onClick={() => handleDeleteStop(stop.id)}
-                      className="text-xs text-gray-400 hover:text-red-500 transition"
-                    >
-                      Delete
-                    </button>
+                    {idx < stops.length - 1 && <div className="w-px flex-1 bg-gray-200 my-2" style={{ minHeight: '40px' }} />}
                   </div>
 
-                  {stop.notes && (
-                    <p className="text-xs text-gray-500 mt-2 italic">{stop.notes}</p>
-                  )}
-
-                  {/* Activities */}
-                  <div className="mt-4 space-y-2">
-                    {(stopActivities[stop.id] || []).map(a => (
-                      <div key={a.id} className="flex items-center gap-3 px-3 py-2 bg-gray-50 rounded-lg">
-                        <span className="text-lg">{TYPE_EMOJI[a.type] || '📌'}</span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-800 truncate">{a.name}</p>
-                          <p className="text-xs text-gray-500">
-                            {a.scheduled_date ? `${fmtDate(a.scheduled_date)}${a.scheduled_time ? ' · ' + a.scheduled_time : ''}` : 'Unscheduled'}
-                            {a.duration_hours ? ` · ${a.duration_hours}h` : ''}
-                          </p>
-                        </div>
-                        <span className="text-xs font-semibold text-gray-700">
-                          ${Number(a.effective_cost).toLocaleString()}
-                        </span>
-                        <button
-                          onClick={() => handleRemoveActivity(stop.id, a.id)}
-                          className="text-gray-300 hover:text-red-500 transition text-xs"
-                          aria-label="Remove"
-                        >
-                          ✕
-                        </button>
+                  <div className="flex-1">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="font-semibold text-gray-800">
+                          {stop.city_name}<span className="text-gray-400">, {stop.country}</span>
+                        </h3>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {fmtDate(stop.arrival_date)} → {fmtDate(stop.departure_date)}
+                        </p>
                       </div>
-                    ))}
+                      <button
+                        onClick={() => handleDeleteStop(stop.id)}
+                        className="text-xs text-gray-400 hover:text-red-500 transition"
+                      >
+                        Delete
+                      </button>
+                    </div>
 
-                    <button
-                      onClick={() => setActivityModalStop(stop)}
-                      className="w-full text-xs text-indigo-600 hover:text-indigo-700 font-medium py-2 border border-dashed border-gray-300 hover:border-indigo-400 rounded-lg transition"
-                    >
-                      + Add activity
-                    </button>
+                    {stop.notes && (
+                      <p className="text-xs text-gray-500 mt-2 italic">{stop.notes}</p>
+                    )}
+
+                    {/* Activities */}
+                    <div className="mt-4 space-y-2">
+                      {(stopActivities[stop.id] || []).map(a => (
+                        <div key={a.id} className="flex items-center gap-3 px-3 py-2 bg-gray-50 rounded-lg">
+                          <span className="text-lg">{TYPE_EMOJI[a.type] || '📌'}</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-800 truncate">{a.name}</p>
+                            <p className="text-xs text-gray-500">
+                              {a.scheduled_date ? `${fmtDate(a.scheduled_date)}${a.scheduled_time ? ' · ' + a.scheduled_time : ''}` : 'Unscheduled'}
+                              {a.duration_hours ? ` · ${a.duration_hours}h` : ''}
+                            </p>
+                          </div>
+                          <span className="text-xs font-semibold text-gray-700">
+                            ${Number(a.effective_cost).toLocaleString()}
+                          </span>
+                          <button
+                            onClick={() => handleRemoveActivity(stop.id, a.id)}
+                            className="text-gray-300 hover:text-red-500 transition text-xs"
+                            aria-label="Remove"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+
+                      <button
+                        onClick={() => setActivityModalStop(stop)}
+                        className="w-full text-xs text-indigo-600 hover:text-indigo-700 font-medium py-2 border border-dashed border-gray-300 hover:border-indigo-400 rounded-lg transition"
+                      >
+                        + Add activity
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
+
+        {/* CALENDAR VIEW — day-by-day planner */}
+        {viewMode === 'calendar' && stops.length > 0 && (
+          <CalendarView
+            trip={trip}
+            stops={stops}
+            stopActivities={stopActivities}
+            onAddActivity={stop => setActivityModalStop(stop)}
+            onRemoveActivity={handleRemoveActivity}
+          />
+        )}
 
         {/* Sub-navigation to other trip-scoped pages */}
         {stops.length > 0 && (
@@ -518,6 +549,152 @@ export default function TripDetailPage() {
       )}
     </div>
   );
+}
+
+// ── Calendar View ────────────────────────────────────────────────────────────
+
+const STOP_COLORS = [
+  'bg-indigo-500', 'bg-emerald-500', 'bg-amber-500',
+  'bg-rose-500',   'bg-violet-500',  'bg-cyan-500',
+];
+
+function CalendarView({
+  trip, stops, stopActivities, onAddActivity, onRemoveActivity,
+}: {
+  trip: Trip;
+  stops: Stop[];
+  stopActivities: Record<string, StopActivity[]>;
+  onAddActivity: (stop: Stop) => void;
+  onRemoveActivity: (stopId: string, actId: string) => void;
+}) {
+  const days = generateDays(trip.start_date, trip.end_date);
+
+  return (
+    <div className="space-y-3">
+      {/* Legend */}
+      <div className="flex flex-wrap gap-2 mb-2">
+        {stops.map((stop, idx) => (
+          <span key={stop.id} className="flex items-center gap-1.5 text-xs text-gray-600">
+            <span className={`w-2.5 h-2.5 rounded-full ${STOP_COLORS[idx % STOP_COLORS.length]}`} />
+            {stop.city_name}
+          </span>
+        ))}
+      </div>
+
+      {days.map(day => {
+        const stopIdx = stops.findIndex(s =>
+          day >= s.arrival_date.slice(0, 10) && day <= s.departure_date.slice(0, 10)
+        );
+        const stop      = stopIdx >= 0 ? stops[stopIdx] : null;
+        const color     = stop ? STOP_COLORS[stopIdx % STOP_COLORS.length] : 'bg-gray-300';
+        const acts      = stop ? (stopActivities[stop.id] || []).filter(a => a.scheduled_date?.slice(0, 10) === day) : [];
+        const unscheduled = stop ? (stopActivities[stop.id] || []).filter(a => !a.scheduled_date) : [];
+
+        const [yyyy, mm, dd] = day.split('-').map(Number);
+        const dateObj = new Date(yyyy, mm - 1, dd);
+        const dayLabel = dateObj.toLocaleDateString('en-US', { weekday: 'short' });
+        const dateLabel = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const isToday = day === new Date().toISOString().slice(0, 10);
+
+        return (
+          <div key={day} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="flex items-stretch">
+              {/* Date column */}
+              <div className={`w-16 flex-shrink-0 flex flex-col items-center justify-center py-3 ${color} text-white`}>
+                <span className="text-[10px] font-medium opacity-80 uppercase">{dayLabel}</span>
+                <span className={`text-lg font-bold leading-tight ${isToday ? 'underline underline-offset-2' : ''}`}>
+                  {dateLabel.split(' ')[1]}
+                </span>
+                <span className="text-[10px] opacity-80">{dateLabel.split(' ')[0]}</span>
+              </div>
+
+              {/* Content column */}
+              <div className="flex-1 p-3">
+                {stop ? (
+                  <>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                        {stop.city_name}, {stop.country}
+                      </span>
+                      <button
+                        onClick={() => onAddActivity(stop)}
+                        className="text-xs text-indigo-600 hover:text-indigo-800 font-medium transition"
+                      >
+                        + activity
+                      </button>
+                    </div>
+
+                    {acts.length === 0 && (
+                      <p className="text-xs text-gray-300 italic">No activities scheduled</p>
+                    )}
+
+                    <div className="space-y-1.5">
+                      {acts
+                        .slice()
+                        .sort((a, b) => (a.scheduled_time || '').localeCompare(b.scheduled_time || ''))
+                        .map(a => (
+                          <div key={a.id} className="flex items-center gap-2 bg-gray-50 rounded-lg px-2.5 py-1.5">
+                            <span className="text-base">{TYPE_EMOJI[a.type] || '📌'}</span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium text-gray-800 truncate">{a.name}</p>
+                              <p className="text-[11px] text-gray-400">
+                                {a.scheduled_time || 'No time set'}
+                                {a.duration_hours ? ` · ${a.duration_hours}h` : ''}
+                              </p>
+                            </div>
+                            <span className="text-xs font-semibold text-gray-600">
+                              ${Number(a.effective_cost).toLocaleString()}
+                            </span>
+                            <button
+                              onClick={() => onRemoveActivity(stop.id, a.id)}
+                              className="text-gray-300 hover:text-red-400 text-xs transition"
+                            >✕</button>
+                          </div>
+                        ))}
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-xs text-gray-300 italic py-1">No stop assigned for this day</p>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Unscheduled activities summary */}
+      {stops.some(s => (stopActivities[s.id] || []).some(a => !a.scheduled_date)) && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mt-2">
+          <p className="text-xs font-semibold text-amber-700 mb-2">Unscheduled activities</p>
+          <div className="space-y-1">
+            {stops.flatMap(stop =>
+              (stopActivities[stop.id] || [])
+                .filter(a => !a.scheduled_date)
+                .map(a => (
+                  <div key={a.id} className="flex items-center gap-2 text-xs text-gray-600">
+                    <span>{TYPE_EMOJI[a.type] || '📌'}</span>
+                    <span className="font-medium">{a.name}</span>
+                    <span className="text-gray-400">— {stop.city_name}</span>
+                    <span className="ml-auto font-semibold">${Number(a.effective_cost).toLocaleString()}</span>
+                  </div>
+                ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function generateDays(start: string, end: string): string[] {
+  const days: string[] = [];
+  const cur = new Date(start.slice(0, 10));
+  const last = new Date(end.slice(0, 10));
+  while (cur <= last) {
+    days.push(cur.toISOString().slice(0, 10));
+    cur.setDate(cur.getDate() + 1);
+  }
+  return days;
 }
 
 // ── Add Stop Modal ───────────────────────────────────────────────────────────
