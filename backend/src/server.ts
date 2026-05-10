@@ -34,12 +34,14 @@ import tripRoutes from './routes/trip.routes';
 import stopRoutes from './routes/stop.routes';
 import cityRoutes from './routes/city.routes';
 import { activityRouter, stopActivityRouter } from './routes/activity.routes';
+import budgetRoutes from './routes/budget.routes';
 app.use('/api/auth',                                          authRoutes);
 app.use('/api/trips',                                         tripRoutes);
 app.use('/api/trips/:tripId/stops',                           stopRoutes);
 app.use('/api/cities',                                        cityRoutes);
 app.use('/api/activities',                                    activityRouter);
 app.use('/api/trips/:tripId/stops/:stopId/activities',        stopActivityRouter);
+app.use('/api/trips/:tripId/budget',                          budgetRoutes);
 
 // Socket.IO events
 io.on('connection', (socket) => {
