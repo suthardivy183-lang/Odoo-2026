@@ -1102,6 +1102,7 @@ export default function TripDetailPage() {
           tripId={id!}
           tripStart={trip.start_date}
           tripEnd={trip.end_date}
+          existingStops={stops}
           onClose={() => setStopModalOpen(false)}
           onCreated={() => { setStopModalOpen(false); loadAll(); }}
         />
@@ -1285,11 +1286,12 @@ function generateDays(start: string, end: string): string[] {
 // ── Add Stop Modal ───────────────────────────────────────────────────────────
 
 function AddStopModal({
-  tripId, tripStart, tripEnd, onClose, onCreated,
+  tripId, tripStart, tripEnd, existingStops, onClose, onCreated,
 }: {
   tripId: string;
   tripStart: string;
   tripEnd: string;
+  existingStops: Stop[];
   onClose: () => void;
   onCreated: () => void;
 }) {
@@ -1306,6 +1308,40 @@ function AddStopModal({
   const minDate = tripStart.slice(0, 10);
   const maxDate = tripEnd.slice(0, 10);
 
+  // Sorted list of already-booked ranges (YYYY-MM-DD)
+  const bookedRanges = useMemo(() => {
+    return existingStops
+      .map(s => ({
+        city: s.city_name,
+        country: s.country,
+        start: s.arrival_date.slice(0, 10),
+        end:   s.departure_date.slice(0, 10),
+      }))
+      .sort((a, b) => a.start.localeCompare(b.start));
+  }, [existingStops]);
+
+  // Conflicts with currently picked range (overlap = aStart <= bEnd && bStart <= aEnd)
+  const conflicts = useMemo(() => {
+    if (!arrival || !departure || departure < arrival) return [];
+    return bookedRanges.filter(r => arrival <= r.end && r.start <= departure);
+  }, [arrival, departure, bookedRanges]);
+
+  // Suggest the next free day after the latest existing stop
+  const suggestedStart = useMemo(() => {
+    if (bookedRanges.length === 0) return minDate;
+    const latestEnd = bookedRanges.reduce((m, r) => (r.end > m ? r.end : m), bookedRanges[0].end);
+    const next = new Date(latestEnd + 'T00:00:00Z');
+    next.setUTCDate(next.getUTCDate() + 1);
+    const iso = next.toISOString().slice(0, 10);
+    return iso > maxDate ? maxDate : iso;
+  }, [bookedRanges, minDate, maxDate]);
+
+  const fmtRange = (start: string, end: string) => {
+    const s = new Date(start + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+    const e = new Date(end   + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+    return `${s} → ${e}`;
+  };
+
   useEffect(() => {
     api.get('/api/cities', { params: { q: search || undefined } })
       .then(r => setCities(r.data.data.cities));
@@ -1317,6 +1353,9 @@ function AddStopModal({
     if (!arrival)   return setError('Pick an arrival date');
     if (!departure) return setError('Pick a departure date');
     if (departure < arrival) return setError('Departure must be after arrival');
+    if (conflicts.length > 0) {
+      return setError(`These dates overlap ${conflicts.map(c => c.city).join(', ')}. Pick a different range.`);
+    }
     setSaving(true);
     setError('');
     try {
@@ -1369,6 +1408,35 @@ function AddStopModal({
           </div>
         </div>
 
+        {bookedRanges.length > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide">📅 Already booked</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setArrival(suggestedStart);
+                  setDeparture(suggestedStart);
+                }}
+                className="text-[11px] text-indigo-600 hover:text-indigo-700 font-medium"
+              >
+                Use next free date ({fmtRange(suggestedStart, suggestedStart).split(' → ')[0]})
+              </button>
+            </div>
+            <ul className="flex flex-wrap gap-1.5">
+              {bookedRanges.map((r, i) => (
+                <li
+                  key={`${r.city}-${i}`}
+                  className="inline-flex items-center gap-1.5 bg-white border border-amber-200 rounded-md px-2 py-1 text-xs"
+                >
+                  <span className="font-semibold text-gray-700">{r.city}</span>
+                  <span className="text-amber-700">{fmtRange(r.start, r.end)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Arrival *</label>
@@ -1378,7 +1446,11 @@ function AddStopModal({
               min={minDate}
               max={maxDate}
               onChange={e => setArrival(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 ${
+                conflicts.length > 0
+                  ? 'border-red-400 focus:ring-red-300 bg-red-50'
+                  : 'border-gray-300 focus:ring-indigo-400'
+              }`}
             />
           </div>
           <div>
@@ -1389,10 +1461,30 @@ function AddStopModal({
               min={arrival || minDate}
               max={maxDate}
               onChange={e => setDeparture(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 ${
+                conflicts.length > 0
+                  ? 'border-red-400 focus:ring-red-300 bg-red-50'
+                  : 'border-gray-300 focus:ring-indigo-400'
+              }`}
             />
           </div>
         </div>
+
+        {conflicts.length > 0 && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 -mt-1">
+            <p className="text-xs font-semibold text-red-700 mb-1">⚠️ Date conflict</p>
+            <p className="text-xs text-red-600">
+              These dates overlap with{' '}
+              {conflicts.map((c, i) => (
+                <span key={i}>
+                  <span className="font-semibold">{c.city}</span> ({fmtRange(c.start, c.end)})
+                  {i < conflicts.length - 1 ? ', ' : ''}
+                </span>
+              ))}
+              . Pick a non-overlapping range.
+            </p>
+          </div>
+        )}
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
@@ -1408,10 +1500,10 @@ function AddStopModal({
         <div className="flex gap-2 pt-2">
           <button
             type="submit"
-            disabled={saving}
-            className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold py-2 rounded-lg transition"
+            disabled={saving || conflicts.length > 0}
+            className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-not-allowed text-white font-semibold py-2 rounded-lg transition"
           >
-            {saving ? 'Adding…' : 'Add stop'}
+            {saving ? 'Adding…' : conflicts.length > 0 ? 'Resolve date conflict' : 'Add stop'}
           </button>
           <button
             type="button"
