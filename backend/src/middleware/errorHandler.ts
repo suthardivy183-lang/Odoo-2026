@@ -22,6 +22,13 @@ export const errorHandler = (
     });
   }
 
+  if ('code' in err && (err as NodeJS.ErrnoException).code === 'ECONNREFUSED') {
+    return res.status(503).json({
+      success: false,
+      message: 'Database connection failed. Please start PostgreSQL and try again.',
+    });
+  }
+
   const status = (err as CustomError).status || 500;
   const message = err.message || 'Internal server error';
 
