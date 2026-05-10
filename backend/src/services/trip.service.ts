@@ -24,7 +24,7 @@ export const createTrip = async (userId: string, input: CreateTripInput) => {
 
     const { rows } = await client.query(
       `INSERT INTO trips (user_id, name, description, start_date, end_date,
-                          cover_photo, total_budget, status)
+                          total_budget, is_public, public_slug)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
        RETURNING *`,
       [
@@ -33,9 +33,9 @@ export const createTrip = async (userId: string, input: CreateTripInput) => {
         input.description ?? null,
         input.start_date,
         input.end_date,
-        input.cover_photo ?? null,
-        input.total_budget ?? null,
-        input.status,
+        input.total_budget,
+        input.is_public,
+        input.is_public ? makeSlug(input.name) : null,
       ]
     );
 
@@ -115,21 +115,17 @@ export const updateTrip = async (id: string, userId: string, input: UpdateTripIn
        description  = COALESCE($2, description),
        start_date   = COALESCE($3, start_date),
        end_date     = COALESCE($4, end_date),
-       cover_photo  = COALESCE($5, cover_photo),
-       total_budget = COALESCE($6, total_budget),
-       status       = COALESCE($7, status),
-       is_public    = COALESCE($8, is_public),
-       public_slug  = $9
-     WHERE id = $10 AND user_id = $11
+       total_budget = COALESCE($5, total_budget),
+       is_public    = COALESCE($6, is_public),
+       public_slug  = $7
+     WHERE id = $8 AND user_id = $9
      RETURNING *`,
     [
       input.name         ?? null,
       input.description  ?? null,
       input.start_date   ?? null,
       input.end_date     ?? null,
-      input.cover_photo  ?? null,
       input.total_budget ?? null,
-      input.status       ?? null,
       input.is_public    ?? null,
       public_slug,
       id,
