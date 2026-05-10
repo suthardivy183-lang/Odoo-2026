@@ -39,8 +39,9 @@ export default function CityDetailPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr]         = useState('');
 
-  const [type, setType]       = useState<string>('');
-  const [maxCost, setMaxCost] = useState<string>('');
+  const [type, setType]           = useState<string>('');
+  const [maxCost, setMaxCost]     = useState<string>('');
+  const [maxDuration, setMaxDuration] = useState<string>('');
 
   useEffect(() => {
     api.get(`/api/cities/${id}`)
@@ -52,11 +53,15 @@ export default function CityDetailPage() {
   const filtered = useMemo(() => {
     if (!city?.activities) return [];
     return city.activities.filter(a => {
-      const matchType = !type || a.type === type;
-      const matchCost = !maxCost || Number(a.cost) <= Number(maxCost);
-      return matchType && matchCost;
+      const matchType     = !type || a.type === type;
+      const matchCost     = !maxCost || Number(a.cost) <= Number(maxCost);
+      const matchDuration = !maxDuration || (
+        maxDuration === '0.5' ? (a.duration_hours ?? 99) <= 0.5 :
+        (a.duration_hours ?? 99) <= Number(maxDuration)
+      );
+      return matchType && matchCost && matchDuration;
     });
-  }, [city, type, maxCost]);
+  }, [city, type, maxCost, maxDuration]);
 
   if (loading) {
     return (
@@ -132,7 +137,8 @@ export default function CityDetailPage() {
           </h2>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-3 mb-5">
+        <div className="flex flex-wrap gap-3 mb-5">
+          {/* Type filter */}
           <select
             value={type}
             onChange={e => setType(e.target.value)}
@@ -143,21 +149,45 @@ export default function CityDetailPage() {
               <option key={t} value={t}>{TYPE_EMOJI[t]} {t}</option>
             ))}
           </select>
+
+          {/* Max cost filter */}
           <input
             type="number"
             placeholder="Max cost ($)"
             value={maxCost}
             min="0"
             onChange={e => setMaxCost(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 w-full sm:w-40"
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 w-36"
           />
-          {(type || maxCost) && (
+
+          {/* Duration filter */}
+          <select
+            value={maxDuration}
+            onChange={e => setMaxDuration(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          >
+            <option value="">Any duration</option>
+            <option value="0.5">≤ 30 min</option>
+            <option value="1">≤ 1 hour</option>
+            <option value="2">≤ 2 hours</option>
+            <option value="4">≤ 4 hours</option>
+            <option value="8">≤ 8 hours</option>
+          </select>
+
+          {(type || maxCost || maxDuration) && (
             <button
-              onClick={() => { setType(''); setMaxCost(''); }}
-              className="text-sm text-gray-500 hover:text-gray-700 px-2"
+              onClick={() => { setType(''); setMaxCost(''); setMaxDuration(''); }}
+              className="text-sm text-gray-500 hover:text-gray-700 px-2 underline underline-offset-2"
             >
-              Clear
+              Clear all
             </button>
+          )}
+
+          {/* Active filter count badge */}
+          {(type || maxCost || maxDuration) && (
+            <span className="ml-auto text-xs text-gray-500 self-center">
+              {filtered.length} of {city.activities?.length ?? 0} shown
+            </span>
           )}
         </div>
 
