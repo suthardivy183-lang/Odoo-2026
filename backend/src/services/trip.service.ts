@@ -64,9 +64,16 @@ export const getTrips = async (userId: string) => {
     `SELECT t.*,
             CASE WHEN t.user_id = $1 THEN 'owner' ELSE tm.role END AS access_role,
             owner.name AS owner_name,
-            COUNT(ts.id)::int AS stop_count,
+            COUNT(DISTINCT ts.id)::int AS stop_count,
             COALESCE(tb.transport_cost + tb.accommodation_cost +
-                     tb.meals_cost + tb.miscellaneous_cost, 0) AS estimated_cost
+                     tb.meals_cost + tb.miscellaneous_cost, 0)
+            + COALESCE((
+                SELECT SUM(COALESCE(sa.custom_cost, a.cost))
+                FROM trip_stops ts2
+                JOIN stop_activities sa ON sa.stop_id = ts2.id
+                JOIN activities      a  ON a.id = sa.activity_id
+                WHERE ts2.trip_id = t.id
+              ), 0) AS estimated_cost
      FROM trips t
      LEFT JOIN trip_members tm ON tm.trip_id = t.id AND tm.user_id = $1
      JOIN users owner ON owner.id = t.user_id
@@ -86,9 +93,16 @@ export const getTripById = async (id: string, userId: string) => {
     `SELECT t.*,
             CASE WHEN t.user_id = $2 THEN 'owner' ELSE tm.role END AS access_role,
             owner.name AS owner_name,
-            COUNT(ts.id)::int AS stop_count,
+            COUNT(DISTINCT ts.id)::int AS stop_count,
             COALESCE(tb.transport_cost + tb.accommodation_cost +
-                     tb.meals_cost + tb.miscellaneous_cost, 0) AS estimated_cost
+                     tb.meals_cost + tb.miscellaneous_cost, 0)
+            + COALESCE((
+                SELECT SUM(COALESCE(sa.custom_cost, a.cost))
+                FROM trip_stops ts2
+                JOIN stop_activities sa ON sa.stop_id = ts2.id
+                JOIN activities      a  ON a.id = sa.activity_id
+                WHERE ts2.trip_id = t.id
+              ), 0) AS estimated_cost
      FROM trips t
      LEFT JOIN trip_members tm ON tm.trip_id = t.id AND tm.user_id = $2
      JOIN users owner ON owner.id = t.user_id
