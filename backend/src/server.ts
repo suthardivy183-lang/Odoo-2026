@@ -31,8 +31,12 @@ app.get('/health', (_req, res) => {
 // Routes
 import authRoutes from './routes/auth.routes';
 import tripRoutes from './routes/trip.routes';
-app.use('/api/auth',  authRoutes);
-app.use('/api/trips', tripRoutes);
+import stopRoutes from './routes/stop.routes';
+import cityRoutes from './routes/city.routes';
+app.use('/api/auth',                    authRoutes);
+app.use('/api/trips',                   tripRoutes);
+app.use('/api/trips/:tripId/stops',     stopRoutes);
+app.use('/api/cities',                  cityRoutes);
 
 // Socket.IO events
 io.on('connection', (socket) => {
