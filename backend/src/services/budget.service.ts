@@ -19,14 +19,24 @@ export const getTripBudget = async (tripId: string, userId: string) => {
     `SELECT tb.*,
             t.total_budget,
             (tb.transport_cost + tb.accommodation_cost + tb.meals_cost + tb.miscellaneous_cost) AS breakdown_total,
-            COALESCE(SUM(COALESCE(sa.custom_cost, a.cost)), 0) AS activities_total
+            COALESCE(act.activities_total, 0) AS activities_total,
+            COALESCE(exp.expenses_total, 0) AS expenses_total
      FROM trip_budgets tb
      JOIN trips t ON t.id = tb.trip_id
-     LEFT JOIN trip_stops ts ON ts.trip_id = t.id
-     LEFT JOIN stop_activities sa ON sa.stop_id = ts.id
-     LEFT JOIN activities a ON a.id = sa.activity_id
+     LEFT JOIN (
+       SELECT ts.trip_id, SUM(COALESCE(sa.custom_cost, a.cost)) AS activities_total
+       FROM trip_stops ts
+       JOIN stop_activities sa ON sa.stop_id = ts.id
+       JOIN activities a ON a.id = sa.activity_id
+       GROUP BY ts.trip_id
+     ) act ON act.trip_id = t.id
+     LEFT JOIN (
+       SELECT trip_id, SUM(converted_amount) AS expenses_total
+       FROM trip_expenses
+       GROUP BY trip_id
+     ) exp ON exp.trip_id = t.id
      WHERE tb.trip_id = $1
-     GROUP BY tb.id, t.total_budget`,
+     GROUP BY tb.id, t.total_budget, act.activities_total, exp.expenses_total`,
     [tripId]
   );
   if (!rows[0]) throw makeErr('Budget not found', 404);

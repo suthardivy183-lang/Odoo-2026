@@ -15,11 +15,42 @@ interface Budget {
   total_budget?: string | number;
   breakdown_total: string | number;
   activities_total: string | number;
+  expenses_total: string | number;
 }
 
 interface Trip {
   id: string;
   name: string;
+}
+
+interface Participant {
+  user_id: string;
+  name: string;
+  email: string;
+  role: 'owner' | 'editor';
+  balance?: number;
+}
+
+interface ExpenseSplit {
+  user_id: string;
+  name: string;
+  email: string;
+  share_amount: string | number;
+}
+
+interface Expense {
+  id: string;
+  title: string;
+  category: string;
+  amount: string | number;
+  currency: string;
+  exchange_rate_to_budget: string | number;
+  converted_amount: string | number;
+  paid_by: string;
+  paid_by_name: string;
+  expense_date: string;
+  notes?: string;
+  splits: ExpenseSplit[];
 }
 
 const CATEGORIES = [
@@ -30,6 +61,8 @@ const CATEGORIES = [
 ] as const;
 
 type CatKey = typeof CATEGORIES[number]['key'];
+
+const EXPENSE_CATEGORIES = ['transport', 'accommodation', 'meals', 'activities', 'miscellaneous'] as const;
 
 export default function BudgetPage() {
   const { id } = useParams<{ id: string }>();
@@ -44,6 +77,19 @@ export default function BudgetPage() {
   const [savedAt, setSavedAt]   = useState<number | null>(null);
   const [err, setErr]           = useState('');
   const [liveFlash, setLiveFlash] = useState(false);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [participants, setParticipants] = useState<Participant[]>([]);
+  const [balances, setBalances] = useState<Participant[]>([]);
+  const [expenseSaving, setExpenseSaving] = useState(false);
+  const [expenseForm, setExpenseForm] = useState({
+    title: '',
+    amount: '',
+    currency: 'USD',
+    exchange_rate_to_budget: '',
+    category: 'miscellaneous',
+    paid_by: '',
+    split_user_ids: [] as string[],
+  });
 
   // Track if user is currently editing — if so, don't overwrite their form
   const isDirtyRef = useRef(false);
@@ -53,8 +99,9 @@ export default function BudgetPage() {
     Promise.all([
       api.get(`/api/trips/${id}`),
       api.get(`/api/trips/${id}/budget`),
+      api.get(`/api/trips/${id}/expenses`),
     ])
-      .then(([tripRes, budRes]) => {
+      .then(([tripRes, budRes, expRes]) => {
         setTrip(tripRes.data.data.trip);
         const b: Budget = budRes.data.data.budget;
         setBudget(b);
@@ -65,6 +112,14 @@ export default function BudgetPage() {
           miscellaneous_cost: String(Number(b.miscellaneous_cost ?? 0)),
         });
         setCurrency(b.currency || 'USD');
+        setExpenses(expRes.data.data.expenses);
+        setParticipants(expRes.data.data.participants);
+        setBalances(expRes.data.data.balances);
+        setExpenseForm(f => ({
+          ...f,
+          currency: b.currency || 'USD',
+          split_user_ids: expRes.data.data.participants.map((p: Participant) => p.user_id),
+        }));
       })
       .catch(e => setErr(e.response?.data?.message || 'Failed to load budget'))
       .finally(() => setLoading(false));
@@ -76,8 +131,9 @@ export default function BudgetPage() {
   }, [form]);
 
   const activitiesTotal = Number(budget?.activities_total ?? 0);
+  const expensesTotal   = expenses.reduce((sum, expense) => sum + Number(expense.converted_amount || 0), 0);
   const totalBudget     = Number(budget?.total_budget ?? 0);
-  const totalSpent      = liveBreakdown + activitiesTotal;
+  const totalSpent      = liveBreakdown + activitiesTotal + expensesTotal;
   const remaining       = totalBudget - totalSpent;
   const usedPct         = totalBudget > 0 ? Math.min(100, (totalSpent / totalBudget) * 100) : 0;
   const overBudget      = totalBudget > 0 && totalSpent > totalBudget;
@@ -128,9 +184,23 @@ export default function BudgetPage() {
       setTimeout(() => setLiveFlash(false), 1200);
     };
 
+    const onExpensesUpdate = (msg: {
+      tripId: string;
+      summary: { expenses: Expense[]; participants: Participant[]; balances: Participant[] };
+    }) => {
+      if (msg.tripId !== id) return;
+      setExpenses(msg.summary.expenses);
+      setParticipants(msg.summary.participants);
+      setBalances(msg.summary.balances);
+      setLiveFlash(true);
+      setTimeout(() => setLiveFlash(false), 1200);
+    };
+
     socket.on('budget:updated', onBudgetUpdate);
+    socket.on('expenses:updated', onExpensesUpdate);
     return () => {
       socket.off('budget:updated', onBudgetUpdate);
+      socket.off('expenses:updated', onExpensesUpdate);
       leaveTripRoom(id);
     };
   }, [id]);
@@ -159,6 +229,68 @@ export default function BudgetPage() {
       setErr(e.response?.data?.message || 'Failed to save');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const toggleSplitUser = (userId: string) => {
+    setExpenseForm(f => {
+      const selected = f.split_user_ids.includes(userId)
+        ? f.split_user_ids.filter(id => id !== userId)
+        : [...f.split_user_ids, userId];
+      return { ...f, split_user_ids: selected };
+    });
+  };
+
+  const handleAddExpense = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!expenseForm.title.trim()) return setErr('Expense name is required');
+    if (!expenseForm.amount || Number(expenseForm.amount) <= 0) return setErr('Expense amount must be greater than zero');
+    const expenseCurrency = expenseForm.currency.toUpperCase();
+    if (expenseCurrency !== currency && (!expenseForm.exchange_rate_to_budget || Number(expenseForm.exchange_rate_to_budget) <= 0)) {
+      return setErr(`Enter the exchange rate from ${expenseCurrency} to ${currency}`);
+    }
+    if (expenseForm.split_user_ids.length === 0) return setErr('Choose at least one person to split with');
+
+    setExpenseSaving(true);
+    setErr('');
+    try {
+      const res = await api.post(`/api/trips/${id}/expenses`, {
+        title: expenseForm.title,
+        amount: Number(expenseForm.amount),
+        category: expenseForm.category,
+        currency: expenseCurrency,
+        exchange_rate_to_budget: expenseCurrency === currency ? undefined : Number(expenseForm.exchange_rate_to_budget),
+        paid_by: expenseForm.paid_by || undefined,
+        split_user_ids: expenseForm.split_user_ids,
+      });
+      setExpenses(res.data.data.expenses);
+      setParticipants(res.data.data.participants);
+      setBalances(res.data.data.balances);
+      setExpenseForm({
+        title: '',
+        amount: '',
+        currency,
+        exchange_rate_to_budget: '',
+        category: 'miscellaneous',
+        paid_by: '',
+        split_user_ids: participants.map(p => p.user_id),
+      });
+    } catch (e: any) {
+      setErr(e.response?.data?.message || 'Failed to add expense');
+    } finally {
+      setExpenseSaving(false);
+    }
+  };
+
+  const handleDeleteExpense = async (expenseId: string) => {
+    if (!confirm('Delete this expense?')) return;
+    try {
+      const res = await api.delete(`/api/trips/${id}/expenses/${expenseId}`);
+      setExpenses(res.data.data.expenses);
+      setParticipants(res.data.data.participants);
+      setBalances(res.data.data.balances);
+    } catch (e: any) {
+      setErr(e.response?.data?.message || 'Failed to delete expense');
     }
   };
 
@@ -327,7 +459,7 @@ export default function BudgetPage() {
             </p>
           )}
 
-          <div className="grid grid-cols-3 gap-4 mt-6 pt-5 border-t border-gray-100 text-center">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6 pt-5 border-t border-gray-100 text-center">
             <div>
               <p className="text-xs text-gray-400">Categories</p>
               <p className="text-base font-semibold text-gray-800">
@@ -341,10 +473,175 @@ export default function BudgetPage() {
               </p>
             </div>
             <div>
+              <p className="text-xs text-gray-400">Expenses</p>
+              <p className="text-base font-semibold text-gray-800">
+                ${expensesTotal.toLocaleString()}
+              </p>
+            </div>
+            <div>
               <p className="text-xs text-gray-400">Total spend</p>
               <p className={`text-base font-bold ${overBudget ? 'text-red-600' : 'text-indigo-600'}`}>
                 ${totalSpent.toLocaleString()}
               </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="bg-white rounded-2xl border border-gray-200 p-6 lg:col-span-2">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-gray-700">Group expenses</h2>
+              <span className="text-xs text-gray-400">${expensesTotal.toLocaleString()} tracked</span>
+            </div>
+
+            <form onSubmit={handleAddExpense} className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-5">
+              <input
+                value={expenseForm.title}
+                onChange={e => setExpenseForm(f => ({ ...f, title: e.target.value }))}
+                placeholder="Dinner, taxi, tickets"
+                className="sm:col-span-2 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              />
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={expenseForm.amount}
+                onChange={e => setExpenseForm(f => ({ ...f, amount: e.target.value }))}
+                placeholder="Amount"
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              />
+              <input
+                value={expenseForm.currency}
+                maxLength={3}
+                onChange={e => setExpenseForm(f => ({
+                  ...f,
+                  currency: e.target.value.toUpperCase(),
+                  exchange_rate_to_budget: e.target.value.toUpperCase() === currency ? '' : f.exchange_rate_to_budget,
+                }))}
+                placeholder={currency}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm uppercase focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              />
+              <select
+                value={expenseForm.category}
+                onChange={e => setExpenseForm(f => ({ ...f, category: e.target.value }))}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              >
+                {EXPENSE_CATEGORIES.map(category => (
+                  <option key={category} value={category}>{category}</option>
+                ))}
+              </select>
+
+              {expenseForm.currency.toUpperCase() !== currency && (
+                <div className="sm:col-span-4 grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 items-center bg-amber-50 border border-amber-100 rounded-lg p-3">
+                  <label className="text-xs text-amber-700">
+                    1 {expenseForm.currency.toUpperCase()} equals how many {currency}?
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.000001"
+                    value={expenseForm.exchange_rate_to_budget}
+                    onChange={e => setExpenseForm(f => ({ ...f, exchange_rate_to_budget: e.target.value }))}
+                    placeholder={`Rate to ${currency}`}
+                    className="w-full sm:w-40 px-3 py-2 border border-amber-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-300"
+                  />
+                </div>
+              )}
+
+              <select
+                value={expenseForm.paid_by}
+                onChange={e => setExpenseForm(f => ({ ...f, paid_by: e.target.value }))}
+                className="sm:col-span-2 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              >
+                <option value="">Paid by me</option>
+                {participants.map(person => (
+                  <option key={person.user_id} value={person.user_id}>{person.name}</option>
+                ))}
+              </select>
+
+              <div className="sm:col-span-2 flex flex-wrap gap-2">
+                {participants.map(person => (
+                  <label key={person.user_id} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
+                    <input
+                      type="checkbox"
+                      checked={expenseForm.split_user_ids.includes(person.user_id)}
+                      onChange={() => toggleSplitUser(person.user_id)}
+                      className="accent-indigo-600"
+                    />
+                    {person.name}
+                  </label>
+                ))}
+              </div>
+
+              <button
+                type="submit"
+                disabled={expenseSaving}
+                className="sm:col-span-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white text-sm font-semibold py-2 rounded-lg transition"
+              >
+                {expenseSaving ? 'Adding...' : 'Add expense and split'}
+              </button>
+            </form>
+
+            <div className="divide-y divide-gray-100">
+              {expenses.map(expense => (
+                <div key={expense.id} className="py-3 flex items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-gray-800 truncate">{expense.title}</p>
+                      <span className="text-[11px] px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full">{expense.category}</span>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      Paid by {expense.paid_by_name} · split with {expense.splits.length} · {new Date(expense.expense_date).toLocaleDateString()}
+                    </p>
+                    {expense.currency !== currency && (
+                      <p className="text-xs text-amber-600 mt-0.5">
+                        {Number(expense.amount).toLocaleString()} {expense.currency} at {Number(expense.exchange_rate_to_budget).toLocaleString()} = {Number(expense.converted_amount).toLocaleString()} {currency}
+                      </p>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-gray-800">
+                      {currency} {Number(expense.converted_amount).toLocaleString()}
+                    </p>
+                    {expense.currency === currency && (
+                      <p className="text-[11px] text-gray-400">{Number(expense.amount).toLocaleString()} {expense.currency}</p>
+                    )}
+                    <button
+                      onClick={() => handleDeleteExpense(expense.id)}
+                      className="text-xs text-gray-300 hover:text-red-500 transition"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {expenses.length === 0 && (
+                <p className="text-sm text-gray-400 text-center py-8">No group expenses yet.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-gray-200 p-6">
+            <h2 className="text-sm font-semibold text-gray-700 mb-4">Split balances</h2>
+            <div className="space-y-3">
+              {balances.map(person => {
+                const bal = Number(person.balance || 0);
+                return (
+                  <div key={person.user_id} className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-700 truncate">{person.name}</p>
+                      <p className="text-xs text-gray-400">{person.role}</p>
+                    </div>
+                    <p className={`text-sm font-bold ${bal > 0 ? 'text-emerald-600' : bal < 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                      {bal > 0 ? '+' : ''}${bal.toLocaleString()}
+                    </p>
+                  </div>
+                );
+              })}
+              {balances.length === 0 && (
+                <p className="text-sm text-gray-400">Invite tripmates to split costs.</p>
+              )}
             </div>
           </div>
         </div>

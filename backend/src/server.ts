@@ -65,6 +65,7 @@ import budgetRoutes from './routes/budget.routes';
 import checklistRoutes from './routes/checklist.routes';
 import notesRoutes from './routes/notes.routes';
 import memberRoutes from './routes/member.routes';
+import expenseRoutes from './routes/expense.routes';
 import publicRoutes from './routes/public.routes';
 app.use('/api/auth',                                          authRoutes);
 app.use('/api/trips',                                         tripRoutes);
@@ -76,6 +77,7 @@ app.use('/api/trips/:tripId/budget',                          budgetRoutes);
 app.use('/api/trips/:tripId/checklist',                       checklistRoutes);
 app.use('/api/trips/:tripId/notes',                           notesRoutes);
 app.use('/api/trips/:tripId/members',                         memberRoutes);
+app.use('/api/trips/:tripId/expenses',                        expenseRoutes);
 app.use('/api/public',                                        publicRoutes);
 
 // Socket.IO events — clients join trip-scoped rooms to receive live updates

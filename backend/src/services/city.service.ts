@@ -25,7 +25,7 @@ export const searchCities = async (params: {
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
   const { rows } = await pool.query(
-    `SELECT id, name, country, region, description, cost_index, popularity_score, image_url
+    `SELECT id, name, country, region, description, cost_index, popularity_score, image_url, latitude, longitude
      FROM cities ${where}
      ORDER BY popularity_score DESC, name ASC`,
     values
@@ -35,7 +35,7 @@ export const searchCities = async (params: {
 
 export const getCityById = async (id: number) => {
   const cityRes = await pool.query(
-    `SELECT id, name, country, region, description, cost_index, popularity_score, image_url
+    `SELECT id, name, country, region, description, cost_index, popularity_score, image_url, latitude, longitude
      FROM cities WHERE id = $1`,
     [id]
   );
