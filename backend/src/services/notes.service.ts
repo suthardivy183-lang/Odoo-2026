@@ -54,10 +54,10 @@ export const createNote = async (
   }
 
   const { rows } = await pool.query(
-    `INSERT INTO trip_notes (trip_id, stop_id, title, content)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO trip_notes (trip_id, stop_id, content)
+     VALUES ($1, $2, $3)
      RETURNING *`,
-    [tripId, input.stop_id ?? null, input.title ?? null, input.content]
+    [tripId, input.stop_id ?? null, input.content]
   );
   return rows[0];
 };
@@ -75,13 +75,9 @@ export const updateNote = async (
     setClauses.push(`content = $${idx++}`);
     values.push(input.content);
   }
-  if (input.title !== undefined) {
-    setClauses.push(`title = $${idx++}`);
-    values.push(input.title);
-  }
   if ('stop_id' in input) {
     setClauses.push(`stop_id = $${idx++}`);
-    values.push(input.stop_id ?? null);
+    values.push(input.stop_id);
   }
   setClauses.push(`updated_at = NOW()`);
   values.push(noteId, tripId);
