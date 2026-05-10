@@ -1167,9 +1167,10 @@ function CalendarView({
       </div>
 
       {days.map(day => {
-        const stopIdx = stops.findIndex(s =>
-          day >= s.arrival_date.slice(0, 10) && day <= s.departure_date.slice(0, 10)
-        );
+        const stopIdx = stops.reduce((best, s, idx) => {
+          const covers = day >= s.arrival_date.slice(0, 10) && day <= s.departure_date.slice(0, 10);
+          return covers ? idx : best;
+        }, -1);
         const stop      = stopIdx >= 0 ? stops[stopIdx] : null;
         const color     = stop ? STOP_COLORS[stopIdx % STOP_COLORS.length] : 'bg-gray-300';
         const acts      = stop ? (stopActivities[stop.id] || []).filter(a => a.scheduled_date?.slice(0, 10) === day) : [];

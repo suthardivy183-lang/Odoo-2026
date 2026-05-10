@@ -29,6 +29,24 @@ type FormData = {
 
 type FormErrors = Partial<Record<keyof FormData | 'root', string>>;
 
+// Defined outside component so React doesn't treat it as a new type on every render
+function Field({ name, label, error, children }: {
+  name: string; label: string; error?: string; children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      {children}
+      {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
+    </div>
+  );
+}
+
+const inputCls = (error?: string) =>
+  `w-full px-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition ${
+    error ? 'border-red-400' : 'border-gray-300'
+  }`;
+
 export default function CreateTripPage() {
   const navigate = useNavigate();
 
@@ -87,21 +105,6 @@ export default function CreateTripPage() {
     }
   };
 
-  const Field = ({ name, label, children }: { name: string; label: string; children: React.ReactNode }) => (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-      {children}
-      {errors[name as keyof FormErrors] && (
-        <p className="text-red-500 text-xs mt-1">{errors[name as keyof FormErrors]}</p>
-      )}
-    </div>
-  );
-
-  const inputCls = (name: string) =>
-    `w-full px-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition ${
-      errors[name as keyof FormErrors] ? 'border-red-400' : 'border-gray-300'
-    }`;
-
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
@@ -120,52 +123,52 @@ export default function CreateTripPage() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            <Field name="name" label="Trip name *">
+            <Field name="name" label="Trip name *" error={errors.name}>
               <input
                 name="name"
                 value={form.name}
                 onChange={handleChange}
                 placeholder="e.g. Europe Summer 2026"
-                className={inputCls('name')}
+                className={inputCls(errors.name)}
               />
             </Field>
 
-            <Field name="description" label="Description">
+            <Field name="description" label="Description" error={errors.description}>
               <textarea
                 name="description"
                 value={form.description}
                 onChange={handleChange}
                 placeholder="What's this trip about?"
                 rows={3}
-                className={`${inputCls('description')} resize-none`}
+                className={`${inputCls(errors.description)} resize-none`}
               />
             </Field>
 
             <div className="grid grid-cols-2 gap-4">
-              <Field name="start_date" label="Start date *">
+              <Field name="start_date" label="Start date *" error={errors.start_date}>
                 <input
                   type="date"
                   name="start_date"
                   value={form.start_date}
                   onChange={handleChange}
-                  className={inputCls('start_date')}
+                  className={inputCls(errors.start_date)}
                 />
               </Field>
 
-              <Field name="end_date" label="End date *">
+              <Field name="end_date" label="End date *" error={errors.end_date}>
                 <input
                   type="date"
                   name="end_date"
                   value={form.end_date}
                   min={form.start_date}
                   onChange={handleChange}
-                  className={inputCls('end_date')}
+                  className={inputCls(errors.end_date)}
                 />
               </Field>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <Field name="total_budget" label="Budget (USD)">
+              <Field name="total_budget" label="Budget (USD)" error={errors.total_budget}>
                 <input
                   type="number"
                   name="total_budget"
@@ -174,11 +177,11 @@ export default function CreateTripPage() {
                   placeholder="0"
                   min="0"
                   step="1"
-                  className={inputCls('total_budget')}
+                  className={inputCls(errors.total_budget)}
                 />
               </Field>
 
-              <Field name="status" label="Status">
+              <Field name="status" label="Status" error={errors.status}>
                 <select
                   name="status"
                   value={form.status}

@@ -16,7 +16,16 @@ interface Budget {
   breakdown_total: string | number;
   activities_total: string | number;
   expenses_total: string | number;
+  lodging_total: string | number;
+  reservations_total: string | number;
 }
+
+const CURRENCIES = [
+  'USD','EUR','GBP','JPY','CAD','AUD','CHF','CNY','INR','MXN',
+  'BRL','SGD','HKD','NOK','SEK','DKK','NZD','ZAR','AED','THB',
+  'TRY','PLN','IDR','MYR','PHP','CZK','HUF','RON','ILS','SAR',
+  'KRW','VND','NGN','EGP','PKR','BDT','COP','CLP','PEN','UAH',
+] as const;
 
 interface Trip {
   id: string;
@@ -130,10 +139,12 @@ export default function BudgetPage() {
     return CATEGORIES.reduce((sum, c) => sum + (Number(form[c.key]) || 0), 0);
   }, [form]);
 
-  const activitiesTotal = Number(budget?.activities_total ?? 0);
-  const expensesTotal   = expenses.reduce((sum, expense) => sum + Number(expense.converted_amount || 0), 0);
-  const totalBudget     = Number(budget?.total_budget ?? 0);
-  const totalSpent      = liveBreakdown + activitiesTotal + expensesTotal;
+  const activitiesTotal   = Number(budget?.activities_total   ?? 0);
+  const lodgingTotal      = Number(budget?.lodging_total      ?? 0);
+  const reservationsTotal = Number(budget?.reservations_total ?? 0);
+  const expensesTotal     = expenses.reduce((sum, expense) => sum + Number(expense.converted_amount || 0), 0);
+  const totalBudget       = Number(budget?.total_budget ?? 0);
+  const totalSpent        = liveBreakdown + activitiesTotal + lodgingTotal + reservationsTotal + expensesTotal;
   const remaining       = totalBudget - totalSpent;
   const usedPct         = totalBudget > 0 ? Math.min(100, (totalSpent / totalBudget) * 100) : 0;
   const overBudget      = totalBudget > 0 && totalSpent > totalBudget;
@@ -402,13 +413,15 @@ export default function BudgetPage() {
 
             <div className="mt-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">Currency</label>
-              <input
-                type="text"
-                maxLength={3}
+              <select
                 value={currency}
-                onChange={e => { setCurrency(e.target.value.toUpperCase()); setSavedAt(null); }}
-                className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 uppercase"
-              />
+                onChange={e => { setCurrency(e.target.value); setSavedAt(null); }}
+                className="w-36 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              >
+                {CURRENCIES.map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
             </div>
 
             <div className="flex items-center gap-3 pt-5 mt-5 border-t border-gray-100">
@@ -459,7 +472,7 @@ export default function BudgetPage() {
             </p>
           )}
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6 pt-5 border-t border-gray-100 text-center">
+          <div className="grid grid-cols-3 lg:grid-cols-6 gap-4 mt-6 pt-5 border-t border-gray-100 text-center">
             <div>
               <p className="text-xs text-gray-400">Categories</p>
               <p className="text-base font-semibold text-gray-800">
@@ -470,6 +483,18 @@ export default function BudgetPage() {
               <p className="text-xs text-gray-400">Activities</p>
               <p className="text-base font-semibold text-gray-800">
                 ${activitiesTotal.toLocaleString()}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-400">Lodging</p>
+              <p className="text-base font-semibold text-gray-800">
+                ${lodgingTotal.toLocaleString()}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-400">Reservations</p>
+              <p className="text-base font-semibold text-gray-800">
+                ${reservationsTotal.toLocaleString()}
               </p>
             </div>
             <div>
@@ -510,17 +535,19 @@ export default function BudgetPage() {
                 placeholder="Amount"
                 className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
               />
-              <input
+              <select
                 value={expenseForm.currency}
-                maxLength={3}
                 onChange={e => setExpenseForm(f => ({
                   ...f,
-                  currency: e.target.value.toUpperCase(),
-                  exchange_rate_to_budget: e.target.value.toUpperCase() === currency ? '' : f.exchange_rate_to_budget,
+                  currency: e.target.value,
+                  exchange_rate_to_budget: e.target.value === currency ? '' : f.exchange_rate_to_budget,
                 }))}
-                placeholder={currency}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm uppercase focus:outline-none focus:ring-2 focus:ring-indigo-400"
-              />
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              >
+                {CURRENCIES.map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
               <select
                 value={expenseForm.category}
                 onChange={e => setExpenseForm(f => ({ ...f, category: e.target.value }))}
