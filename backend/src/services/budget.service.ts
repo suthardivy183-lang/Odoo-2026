@@ -16,11 +16,20 @@ export const getTripBudget = async (tripId: string, userId: string) => {
   await verifyTripOwner(tripId, userId);
 
   const { rows } = await pool.query(
-    `SELECT tb.*,
+    `SELECT tb.id,
+            tb.trip_id,
+            tb.transport_cost,
+            COALESCE(lod.lodging_total, tb.accommodation_cost) AS accommodation_cost,
+            tb.meals_cost,
+            tb.miscellaneous_cost,
+            tb.currency,
+            tb.created_at,
+            tb.updated_at,
             t.total_budget,
-            (tb.transport_cost + tb.accommodation_cost + tb.meals_cost + tb.miscellaneous_cost) AS breakdown_total,
+            (tb.transport_cost + COALESCE(lod.lodging_total, tb.accommodation_cost) + tb.meals_cost + tb.miscellaneous_cost) AS breakdown_total,
             COALESCE(act.activities_total, 0) AS activities_total,
-            COALESCE(exp.expenses_total, 0) AS expenses_total
+            COALESCE(exp.expenses_total, 0) AS expenses_total,
+            COALESCE(lod.lodging_total, 0) AS lodging_total
      FROM trip_budgets tb
      JOIN trips t ON t.id = tb.trip_id
      LEFT JOIN (
@@ -35,8 +44,14 @@ export const getTripBudget = async (tripId: string, userId: string) => {
        FROM trip_expenses
        GROUP BY trip_id
      ) exp ON exp.trip_id = t.id
+     LEFT JOIN (
+       SELECT trip_id,
+              SUM(GREATEST(1, check_out - check_in) * nightly_rate) AS lodging_total
+       FROM trip_lodgings
+       GROUP BY trip_id
+     ) lod ON lod.trip_id = t.id
      WHERE tb.trip_id = $1
-     GROUP BY tb.id, t.total_budget, act.activities_total, exp.expenses_total`,
+     GROUP BY tb.id, t.total_budget, act.activities_total, exp.expenses_total, lod.lodging_total`,
     [tripId]
   );
   if (!rows[0]) throw makeErr('Budget not found', 404);

@@ -67,6 +67,44 @@ interface Stop {
   longitude?: string | number | null;
 }
 
+interface LodgingOption {
+  id: number;
+  city_id: number;
+  city_name: string;
+  country: string;
+  name: string;
+  lodging_type: string;
+  rating: string | number;
+  nightly_rate: string | number;
+  currency: string;
+  booking_url?: string;
+  amenities?: string[];
+  image_url?: string;
+}
+
+interface TripLodging {
+  id: string;
+  trip_id: string;
+  stop_id: string;
+  lodging_option_id?: number | null;
+  city_id: number;
+  city_name: string;
+  country: string;
+  name: string;
+  lodging_type?: string;
+  rating?: string | number;
+  nightly_rate: string | number;
+  currency: string;
+  guests: number;
+  status: 'saved' | 'booked';
+  check_in: string;
+  check_out: string;
+  booking_url?: string;
+  amenities?: string[];
+  image_url?: string;
+  notes?: string;
+}
+
 interface Activity {
   id: number;
   name: string;
@@ -80,6 +118,13 @@ interface Activity {
 
 const fmtDate = (d: string) =>
   new Date(d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+const dateInputValue = (d: string) => d.slice(0, 10);
+
+const nightsBetween = (checkIn: string, checkOut: string) => {
+  const ms = new Date(checkOut).getTime() - new Date(checkIn).getTime();
+  return Math.max(1, Math.ceil(ms / (24 * 60 * 60 * 1000)));
+};
 
 const TYPE_EMOJI: Record<string, string> = {
   sightseeing: '🏛️', food: '🍽️', adventure: '🧗', culture: '🎭',
@@ -228,11 +273,15 @@ export default function TripDetailPage() {
   const [trip,  setTrip]  = useState<Trip | null>(null);
   const [stops, setStops] = useState<Stop[]>([]);
   const [stopActivities, setStopActivities] = useState<Record<string, StopActivity[]>>({});
+  const [lodgingOptions, setLodgingOptions] = useState<LodgingOption[]>([]);
+  const [lodgings, setLodgings] = useState<TripLodging[]>([]);
+  const [lodgingTotal, setLodgingTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [err, setErr]     = useState('');
 
   const [stopModalOpen, setStopModalOpen]         = useState(false);
   const [activityModalStop, setActivityModalStop] = useState<Stop | null>(null);
+  const [lodgingModalStop, setLodgingModalStop]   = useState<Stop | null>(null);
   const [savingShare, setSavingShare] = useState(false);
   const [optimizingRoute, setOptimizingRoute] = useState(false);
   const [routeMessage, setRouteMessage] = useState('');
@@ -245,13 +294,17 @@ export default function TripDetailPage() {
   const loadAll = async () => {
     if (!id) return;
     try {
-      const [tripRes, stopsRes] = await Promise.all([
+      const [tripRes, stopsRes, lodgingRes] = await Promise.all([
         api.get(`/api/trips/${id}`),
         api.get(`/api/trips/${id}/stops`),
+        api.get(`/api/trips/${id}/lodgings`),
       ]);
       setTrip(tripRes.data.data.trip);
       const loadedStops: Stop[] = stopsRes.data.data.stops;
       setStops(loadedStops);
+      setLodgingOptions(lodgingRes.data.data.options || []);
+      setLodgings(lodgingRes.data.data.lodgings || []);
+      setLodgingTotal(Number(lodgingRes.data.data.total || 0));
 
       // Fetch activities for each stop in parallel
       const actMap: Record<string, StopActivity[]> = {};
@@ -292,15 +345,27 @@ export default function TripDetailPage() {
     const onMembersChanged = (msg: { tripId: string }) => {
       if (msg.tripId === id) loadMembers();
     };
+    const onLodgingUpdated = (msg: { tripId: string; lodging?: { options: LodgingOption[]; lodgings: TripLodging[]; total: number } }) => {
+      if (msg.tripId !== id) return;
+      if (msg.lodging) {
+        setLodgingOptions(msg.lodging.options || []);
+        setLodgings(msg.lodging.lodgings || []);
+        setLodgingTotal(Number(msg.lodging.total || 0));
+      } else {
+        loadAll();
+      }
+    };
 
     socket.on('trip:changed', onTripChanged);
     socket.on('trip:updated', onTripChanged);
     socket.on('trip:members:updated', onMembersChanged);
+    socket.on('lodging:updated', onLodgingUpdated);
 
     return () => {
       socket.off('trip:changed', onTripChanged);
       socket.off('trip:updated', onTripChanged);
       socket.off('trip:members:updated', onMembersChanged);
+      socket.off('lodging:updated', onLodgingUpdated);
       leaveTripRoom(id);
     };
   }, [id, trip?.access_role]);
@@ -317,6 +382,21 @@ export default function TripDetailPage() {
       ...prev,
       [stopId]: prev[stopId].filter(a => a.id !== activityId),
     }));
+  };
+
+  const removeLodging = async (lodgingId: string) => {
+    if (!confirm('Remove this lodging from the trip?')) return;
+    const res = await api.delete(`/api/trips/${id}/lodgings/${lodgingId}`);
+    setLodgingOptions(res.data.data.options || []);
+    setLodgings(res.data.data.lodgings || []);
+    setLodgingTotal(Number(res.data.data.total || 0));
+  };
+
+  const markLodgingBooked = async (lodging: TripLodging) => {
+    const res = await api.put(`/api/trips/${id}/lodgings/${lodging.id}`, { status: 'booked' });
+    setLodgingOptions(res.data.data.options || []);
+    setLodgings(res.data.data.lodgings || []);
+    setLodgingTotal(Number(res.data.data.total || 0));
   };
 
   const togglePublic = async () => {
@@ -392,6 +472,13 @@ export default function TripDetailPage() {
     () => new Map(routeStats.legs.map(leg => [leg.fromStopId, leg])),
     [routeStats.legs]
   );
+  const lodgingsByStop = useMemo(() => {
+    const grouped = new Map<string, TripLodging[]>();
+    lodgings.forEach(lodging => {
+      grouped.set(lodging.stop_id, [...(grouped.get(lodging.stop_id) || []), lodging]);
+    });
+    return grouped;
+  }, [lodgings]);
 
   if (loading) {
     return (
@@ -476,7 +563,7 @@ export default function TripDetailPage() {
           )}
 
           {/* Quick stats */}
-          <div className="grid grid-cols-3 gap-4 mt-5 pt-5 border-t border-gray-100">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-5 pt-5 border-t border-gray-100">
             <div>
               <p className="text-xs text-gray-400">Stops</p>
               <p className="text-lg font-semibold text-gray-800">{stops.length}</p>
@@ -495,6 +582,13 @@ export default function TripDetailPage() {
               {trip.total_budget && (
                 <p className="text-xs text-gray-400">of ${Number(trip.total_budget).toLocaleString()} budget</p>
               )}
+            </div>
+            <div>
+              <p className="text-xs text-gray-400">Lodging</p>
+              <p className="text-lg font-semibold text-gray-800">
+                ${lodgingTotal.toLocaleString()}
+              </p>
+              <p className="text-xs text-gray-400">{lodgings.length} saved stay{lodgings.length !== 1 ? 's' : ''}</p>
             </div>
           </div>
         </div>
@@ -555,6 +649,104 @@ export default function TripDetailPage() {
             </div>
           </div>
         )}
+
+        <div className="bg-white rounded-2xl border border-gray-200 p-5 mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
+            <div>
+              <h2 className="text-base font-semibold text-gray-800">Lodging</h2>
+              <p className="text-xs text-gray-400 mt-1">Discover hotel-style stays for each city stop and save your booking plan.</p>
+            </div>
+            <div className="text-sm font-semibold text-gray-800">
+              ${lodgingTotal.toLocaleString()} <span className="text-xs font-normal text-gray-400">estimated</span>
+            </div>
+          </div>
+
+          {stops.length === 0 ? (
+            <p className="text-sm text-gray-400 py-6 text-center">Add stops before choosing lodging.</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+              {stops.map(stop => {
+                const saved = lodgingsByStop.get(stop.id) || [];
+                const suggestions = lodgingOptions
+                  .filter(option => option.city_id === stop.city_id)
+                  .slice(0, 2);
+
+                return (
+                  <div key={stop.id} className="border border-gray-200 rounded-xl p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-800">{stop.city_name}</p>
+                        <p className="text-xs text-gray-400">{fmtDate(stop.arrival_date)} to {fmtDate(stop.departure_date)}</p>
+                      </div>
+                      <button
+                        onClick={() => setLodgingModalStop(stop)}
+                        className="text-xs font-semibold text-indigo-600 hover:text-indigo-700"
+                      >
+                        Add
+                      </button>
+                    </div>
+
+                    {saved.length > 0 ? (
+                      <div className="mt-3 space-y-2">
+                        {saved.map(lodging => (
+                          <div key={lodging.id} className="bg-gray-50 rounded-lg px-3 py-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <p className="text-sm font-semibold text-gray-800">{lodging.name}</p>
+                                <p className="text-xs text-gray-500">
+                                  {nightsBetween(lodging.check_in, lodging.check_out)} night{nightsBetween(lodging.check_in, lodging.check_out) !== 1 ? 's' : ''} · {lodging.currency} {Number(lodging.nightly_rate).toLocaleString()}/night
+                                </p>
+                              </div>
+                              <span className={`text-[11px] font-semibold px-2 py-1 rounded-full ${
+                                lodging.status === 'booked' ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-50 text-indigo-700'
+                              }`}>
+                                {lodging.status}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3 mt-2 text-xs">
+                              {lodging.booking_url && (
+                                <a href={lodging.booking_url} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline">
+                                  Booking
+                                </a>
+                              )}
+                              {lodging.status !== 'booked' && (
+                                <button onClick={() => markLodgingBooked(lodging)} className="text-emerald-600 hover:underline">
+                                  Mark booked
+                                </button>
+                              )}
+                              <button onClick={() => removeLodging(lodging.id)} className="text-gray-400 hover:text-red-500 ml-auto">
+                                Remove
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="mt-3 space-y-2">
+                        {suggestions.map(option => (
+                          <button
+                            key={option.id}
+                            type="button"
+                            onClick={() => setLodgingModalStop(stop)}
+                            className="w-full text-left bg-gray-50 hover:bg-indigo-50 rounded-lg px-3 py-2 transition"
+                          >
+                            <p className="text-sm font-semibold text-gray-800">{option.name}</p>
+                            <p className="text-xs text-gray-500">
+                              {Number(option.rating).toFixed(1)} stars · {option.currency} {Number(option.nightly_rate).toLocaleString()}/night
+                            </p>
+                          </button>
+                        ))}
+                        {suggestions.length === 0 && (
+                          <p className="text-xs text-gray-400 py-3">No hotel suggestions for this city yet.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(360px,520px)] gap-6 items-start">
           <section>
@@ -741,6 +933,22 @@ export default function TripDetailPage() {
           onAdded={() => { setActivityModalStop(null); loadAll(); }}
         />
       )}
+
+      {/* Add Lodging Modal */}
+      {lodgingModalStop && (
+        <AddLodgingModal
+          tripId={id!}
+          stop={lodgingModalStop}
+          options={lodgingOptions.filter(option => option.city_id === lodgingModalStop.city_id)}
+          onClose={() => setLodgingModalStop(null)}
+          onAdded={(data) => {
+            setLodgingModalStop(null);
+            setLodgingOptions(data.options || []);
+            setLodgings(data.lodgings || []);
+            setLodgingTotal(Number(data.total || 0));
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -890,6 +1098,157 @@ function AddStopModal({
 }
 
 // ── Add Activity Modal ───────────────────────────────────────────────────────
+
+function AddLodgingModal({
+  tripId, stop, options, onClose, onAdded,
+}: {
+  tripId: string;
+  stop: Stop;
+  options: LodgingOption[];
+  onClose: () => void;
+  onAdded: (data: { options: LodgingOption[]; lodgings: TripLodging[]; total: number }) => void;
+}) {
+  const [optionId, setOptionId] = useState<number | null>(options[0]?.id ?? null);
+  const [customName, setCustomName] = useState('');
+  const [checkIn, setCheckIn] = useState(dateInputValue(stop.arrival_date));
+  const [checkOut, setCheckOut] = useState(dateInputValue(stop.departure_date));
+  const [nightlyRate, setNightlyRate] = useState('');
+  const [guests, setGuests] = useState('2');
+  const [status, setStatus] = useState<'saved' | 'booked'>('saved');
+  const [notes, setNotes] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const selectedOption = options.find(option => option.id === optionId);
+  const minDate = dateInputValue(stop.arrival_date);
+  const maxDate = dateInputValue(stop.departure_date);
+  const effectiveRate = nightlyRate ? Number(nightlyRate) : Number(selectedOption?.nightly_rate || 0);
+  const total = effectiveRate * nightsBetween(checkIn, checkOut);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!optionId && !customName.trim()) return setError('Choose a hotel or enter a custom lodging name');
+    if (checkOut < checkIn) return setError('Check-out must be on or after check-in');
+
+    setSaving(true);
+    setError('');
+    try {
+      const res = await api.post(`/api/trips/${tripId}/lodgings`, {
+        stop_id: stop.id,
+        lodging_option_id: optionId || undefined,
+        custom_name: optionId ? undefined : customName.trim(),
+        check_in: checkIn,
+        check_out: checkOut,
+        nightly_rate: nightlyRate ? Number(nightlyRate) : undefined,
+        currency: selectedOption?.currency || 'USD',
+        guests: Number(guests) || 1,
+        status,
+        notes: notes || undefined,
+      });
+      onAdded(res.data.data);
+    } catch (e: any) {
+      setError(e.response?.data?.message || 'Failed to save lodging');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal open onClose={onClose} title={`Add lodging in ${stop.city_name}`} size="lg">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {error && <p className="text-sm text-red-600 bg-red-50 border border-red-100 px-3 py-2 rounded-lg">{error}</p>}
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Hotel suggestions</label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {options.map(option => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => {
+                  setOptionId(option.id);
+                  setCustomName('');
+                  setNightlyRate('');
+                }}
+                className={`text-left border rounded-lg px-3 py-2 transition ${
+                  optionId === option.id ? 'border-indigo-300 bg-indigo-50' : 'border-gray-200 hover:bg-gray-50'
+                }`}
+              >
+                <p className="text-sm font-semibold text-gray-800">{option.name}</p>
+                <p className="text-xs text-gray-500">
+                  {Number(option.rating).toFixed(1)} stars · {option.currency} {Number(option.nightly_rate).toLocaleString()}/night
+                </p>
+                {option.amenities?.length ? (
+                  <p className="text-[11px] text-gray-400 mt-1 truncate">{option.amenities.slice(0, 3).join(', ')}</p>
+                ) : null}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Custom lodging</label>
+          <input
+            value={customName}
+            onChange={e => {
+              setCustomName(e.target.value);
+              setOptionId(null);
+            }}
+            placeholder="Apartment, hostel, friend's place..."
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Check-in</label>
+            <input type="date" value={checkIn} min={minDate} max={maxDate} onChange={e => setCheckIn(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Check-out</label>
+            <input type="date" value={checkOut} min={checkIn || minDate} max={maxDate} onChange={e => setCheckOut(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Nightly rate</label>
+            <input type="number" min="0" step="0.01" value={nightlyRate} onChange={e => setNightlyRate(e.target.value)} placeholder={selectedOption ? String(Number(selectedOption.nightly_rate)) : '0'} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Guests</label>
+            <input type="number" min="1" value={guests} onChange={e => setGuests(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+            <select value={status} onChange={e => setStatus(e.target.value as 'saved' | 'booked')} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+              <option value="saved">Saved</option>
+              <option value="booked">Booked</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-sm text-gray-600">
+          Estimated lodging total: <span className="font-semibold text-gray-800">${total.toLocaleString()}</span>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Confirmation number, room preference, cancellation note..." className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none" />
+        </div>
+
+        <div className="flex gap-2 pt-2">
+          <button type="submit" disabled={saving} className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold py-2 rounded-lg transition">
+            {saving ? 'Saving...' : 'Save lodging'}
+          </button>
+          <button type="button" onClick={onClose} className="px-4 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 transition">
+            Cancel
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
 
 function AddActivityModal({
   tripId, stop, onClose, onAdded,
