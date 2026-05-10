@@ -8,9 +8,8 @@ export const createTripSchema = z
     description: z.string().trim().max(1000).optional(),
     start_date: z.string().regex(dateRegex, 'Date must be YYYY-MM-DD'),
     end_date:   z.string().regex(dateRegex, 'Date must be YYYY-MM-DD'),
-    cover_photo: z.string().url('Invalid URL').optional(),
-    total_budget: z.number().positive('Budget must be positive').optional(),
-    status: z.enum(['draft', 'active', 'completed']).default('draft'),
+    total_budget: z.number().nonnegative('Budget must be zero or greater'),
+    is_public: z.boolean(),
   })
   .refine((d) => d.end_date >= d.start_date, {
     message: 'end_date must be on or after start_date',
@@ -23,9 +22,7 @@ export const updateTripSchema = z
     description:  z.string().trim().max(1000).optional(),
     start_date:   z.string().regex(dateRegex, 'Date must be YYYY-MM-DD').optional(),
     end_date:     z.string().regex(dateRegex, 'Date must be YYYY-MM-DD').optional(),
-    cover_photo:  z.string().url('Invalid URL').optional(),
-    total_budget: z.number().positive().optional(),
-    status:       z.enum(['draft', 'active', 'completed']).optional(),
+    total_budget: z.number().nonnegative().optional(),
     is_public:    z.boolean().optional(),
   })
   .refine(

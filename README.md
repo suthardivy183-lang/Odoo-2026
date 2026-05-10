@@ -7,6 +7,23 @@ packing checklists, jot down notes, and share trips publicly via a slug URL.
 Live updates are pushed over Socket.io so multiple clients viewing the same trip
 stay in sync.
 
+## Features
+
+1. User registration and login with JWT authentication
+2. Protected API routes for authenticated travelers
+3. City discovery with seeded destination data
+4. Activity browsing by city and activity type
+5. Trip creation, editing, listing, and deletion
+6. Ordered trip stops with arrival and departure dates
+7. Stop-level activity planning and scheduling
+8. Public trip sharing with generated public slugs
+9. Trip budget tracking across transport, accommodation, meals, and miscellaneous costs
+10. Packing checklist management with categories and packed status
+11. Trip notes and journal entries
+12. Realtime server support with Socket.io
+13. Request validation with Zod schemas
+14. In-memory API rate limiting for basic abuse protection
+
 ## Tech Stack
 
 - **Frontend**: React 19 + Vite + TypeScript + Tailwind CSS 4 + React Router
@@ -121,6 +138,13 @@ All `/api/trips/*` and nested routes require `Authorization: Bearer <jwt>`.
 - ✅ Real-time updates via Socket.io
 - ✅ Indexed schema (38 indexes), FK cascades, `updated_at` triggers
 - ✅ Modular routes / controllers / services / validators
+- ✅ In-memory rate limiter (100 req / 15 min per IP)
+
+## Team
+
+- Shivam
+- Divy
+- Suthar
 
 ## Repository
 

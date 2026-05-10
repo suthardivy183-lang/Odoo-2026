@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import { errorHandler } from './middleware/errorHandler';
+import rateLimiter from './middleware/rateLimiter';
 import { logger } from './utils/logger';
 import { testConnection } from './database/pool';
 
@@ -23,6 +24,7 @@ app.set('io', io);
 
 // Middleware
 app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:5173' }));
+app.use(rateLimiter);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

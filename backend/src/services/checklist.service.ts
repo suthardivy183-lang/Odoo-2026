@@ -1,5 +1,5 @@
 import pool from '../database/pool';
-import { AddItemInput, UpdateItemInput } from '../validators/checklist.validator';
+import { CreateChecklistInput, UpdateChecklistInput } from '../validators/checklist.validator';
 
 const makeErr = (msg: string, status: number) => {
   const e = new Error(msg) as Error & { status: number };
@@ -28,21 +28,21 @@ export const getChecklist = async (tripId: string, userId: string) => {
 };
 
 export const addChecklistItem = async (
-  tripId: string, userId: string, input: AddItemInput
+  tripId: string, userId: string, input: CreateChecklistInput
 ) => {
   await verifyTripOwner(tripId, userId);
 
   const { rows } = await pool.query(
-    `INSERT INTO trip_checklist (trip_id, item_name, category)
-     VALUES ($1, $2, $3)
+    `INSERT INTO trip_checklist (trip_id, item_name, category, is_packed)
+     VALUES ($1, $2, $3, $4)
      RETURNING *`,
-    [tripId, input.item_name, input.category]
+    [tripId, input.item_name, input.category, input.is_packed]
   );
   return rows[0];
 };
 
 export const updateChecklistItem = async (
-  tripId: string, itemId: string, userId: string, input: UpdateItemInput
+  tripId: string, itemId: string, userId: string, input: UpdateChecklistInput
 ) => {
   await verifyTripOwner(tripId, userId);
 
