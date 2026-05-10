@@ -22,7 +22,7 @@ export const list = async (req: AuthRequest, res: Response, next: NextFunction) 
 
 export const getOne = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const trip = await getTripById(req.params.id, req.user!.id);
+    const trip = await getTripById(req.params.id as string, req.user!.id);
     res.json({ success: true, data: { trip } });
   } catch (err) { next(err); }
 };
@@ -30,14 +30,14 @@ export const getOne = async (req: AuthRequest, res: Response, next: NextFunction
 export const update = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const input = updateTripSchema.parse(req.body);
-    const trip  = await updateTrip(req.params.id, req.user!.id, input);
+    const trip  = await updateTrip(req.params.id as string, req.user!.id, input);
     res.json({ success: true, data: { trip } });
   } catch (err) { next(err); }
 };
 
 export const remove = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    await deleteTrip(req.params.id, req.user!.id);
+    await deleteTrip(req.params.id as string, req.user!.id);
     res.json({ success: true, message: 'Trip deleted' });
   } catch (err) { next(err); }
 };

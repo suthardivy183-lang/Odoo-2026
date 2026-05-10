@@ -7,7 +7,7 @@ const SALT_ROUNDS = 12;
 
 const signToken = (id: string, email: string): string =>
   jwt.sign({ id, email }, process.env.JWT_SECRET || 'secret', {
-    expiresIn: process.env.JWT_EXPIRE || '7d',
+    expiresIn: (process.env.JWT_EXPIRE || '7d') as any,
   });
 
 export const registerUser = async (input: RegisterInput) => {
