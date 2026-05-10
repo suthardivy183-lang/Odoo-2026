@@ -1,6 +1,6 @@
 import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../middleware/auth';
-import { addItemSchema, updateItemSchema } from '../validators/checklist.validator';
+import { createChecklistSchema, updateChecklistSchema } from '../validators/checklist.validator';
 import {
   getChecklist, addChecklistItem, updateChecklistItem,
   toggleChecklistItem, deleteChecklistItem,
@@ -15,7 +15,7 @@ export const list = async (req: AuthRequest, res: Response, next: NextFunction) 
 
 export const add = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const input = addItemSchema.parse(req.body);
+    const input = createChecklistSchema.parse(req.body);
     const item  = await addChecklistItem(req.params.tripId as string, req.user!.id, input);
     res.status(201).json({ success: true, data: { item } });
   } catch (err) { next(err); }
@@ -23,7 +23,7 @@ export const add = async (req: AuthRequest, res: Response, next: NextFunction) =
 
 export const update = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const input = updateItemSchema.parse(req.body);
+    const input = updateChecklistSchema.parse(req.body);
     const item  = await updateChecklistItem(
       req.params.tripId as string, req.params.itemId as string, req.user!.id, input
     );
