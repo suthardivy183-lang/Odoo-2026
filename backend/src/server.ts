@@ -29,6 +29,14 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Health check
+app.get('/', (_req, res) => {
+  res.json({
+    name: 'Traveloop API',
+    status: 'ok',
+    health: '/health',
+  });
+});
+
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
