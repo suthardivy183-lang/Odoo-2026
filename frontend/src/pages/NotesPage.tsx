@@ -77,7 +77,7 @@ export default function NotesPage() {
     setSaving(true);
     setErr('');
     try {
-      const res = await api.post(`/api/trips/${id}/notes`, {
+      await api.post(`/api/trips/${id}/notes`, {
         title:   title.trim() || undefined,
         content: content.trim(),
         stop_id: stopId || undefined,

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Modal from '../components/Modal';
 import api from '../services/api';
@@ -74,8 +74,6 @@ const TYPE_EMOJI: Record<string, string> = {
 
 export default function TripDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-
   const [trip,  setTrip]  = useState<Trip | null>(null);
   const [stops, setStops] = useState<Stop[]>([]);
   const [stopActivities, setStopActivities] = useState<Record<string, StopActivity[]>>({});
