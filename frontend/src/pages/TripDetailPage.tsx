@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { CircleMarker, MapContainer, Polyline, Popup, TileLayer, useMap } from 'react-leaflet';
 import type { LatLngBoundsExpression, LatLngExpression } from 'leaflet';
@@ -85,6 +85,84 @@ const TYPE_EMOJI: Record<string, string> = {
   sightseeing: '🏛️', food: '🍽️', adventure: '🧗', culture: '🎭',
   shopping: '🛍️', nightlife: '🌃', nature: '🌳', wellness: '🧘',
 };
+
+// ── Distance / travel-time helpers ───────────────────────────────────────────
+
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function fmtDuration(hours: number): string {
+  const h = Math.floor(hours);
+  const m = Math.round((hours - h) * 60);
+  if (h === 0) return `${m}m`;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
+interface TravelInfo {
+  km: number;
+  driveLabel: string;
+  flyLabel: string | null;
+  mapsUrl: string;
+}
+
+function getTravelInfo(from: Stop, to: Stop): TravelInfo | null {
+  const lat1 = Number(from.latitude);
+  const lon1 = Number(from.longitude);
+  const lat2 = Number(to.latitude);
+  const lon2 = Number(to.longitude);
+  if (!isFinite(lat1) || !isFinite(lon1) || !isFinite(lat2) || !isFinite(lon2)) return null;
+
+  const km = haversineKm(lat1, lon1, lat2, lon2);
+  const driveLabel = fmtDuration(km / 80);
+  const flyLabel = km > 200 ? fmtDuration(km / 800 + 1.5) : null;
+  const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${lat1},${lon1}&destination=${lat2},${lon2}`;
+  return { km, driveLabel, flyLabel, mapsUrl };
+}
+
+function TravelConnector({ info, fromCity, toCity }: { info: TravelInfo; fromCity: string; toCity: string }) {
+  const kmLabel = info.km >= 1000
+    ? `${(info.km / 1000).toFixed(1)}k km`
+    : `${Math.round(info.km)} km`;
+
+  return (
+    <div className="flex items-center gap-3 py-1 px-2">
+      {/* Left vertical line */}
+      <div className="w-8 flex justify-center flex-shrink-0">
+        <div className="w-px bg-gray-200 h-full min-h-[40px]" />
+      </div>
+
+      {/* Connector pill */}
+      <div className="flex-1 flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-500">
+        <span className="font-semibold text-gray-700">{kmLabel}</span>
+        <span className="text-gray-300">·</span>
+        <span>🚗 {info.driveLabel}</span>
+        {info.flyLabel && (
+          <>
+            <span className="text-gray-300">·</span>
+            <span>✈️ {info.flyLabel}</span>
+          </>
+        )}
+        <span className="text-gray-300 ml-auto">·</span>
+        <a
+          href={info.mapsUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-indigo-500 hover:text-indigo-700 font-medium transition whitespace-nowrap"
+          title={`Directions from ${fromCity} to ${toCity}`}
+        >
+          Open in Maps ↗
+        </a>
+      </div>
+    </div>
+  );
+}
 
 type MappedStop = Stop & {
   lat: number;
@@ -528,75 +606,90 @@ export default function TripDetailPage() {
 
         {/* LIST VIEW — timeline grouped by stop */}
         {viewMode === 'list' && (
-          <div className="space-y-4">
-            {stops.map((stop, idx) => (
-              <div key={stop.id} className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-                <div className="flex items-start gap-4 p-5">
-                  <div className="flex flex-col items-center">
-                    <div className="w-8 h-8 rounded-full bg-indigo-600 text-white text-sm font-bold flex items-center justify-center">
-                      {idx + 1}
-                    </div>
-                    {idx < stops.length - 1 && <div className="w-px flex-1 bg-gray-200 my-2" style={{ minHeight: '40px' }} />}
-                  </div>
-
-                  <div className="flex-1">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h3 className="font-semibold text-gray-800">
-                          {stop.city_name}<span className="text-gray-400">, {stop.country}</span>
-                        </h3>
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          {fmtDate(stop.arrival_date)} → {fmtDate(stop.departure_date)}
-                        </p>
+          <div>
+            {stops.map((stop, idx) => {
+              const next = stops[idx + 1];
+              const travel = next ? getTravelInfo(stop, next) : null;
+              return (
+                <React.Fragment key={stop.id}>
+                  <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+                    <div className="flex items-start gap-4 p-5">
+                      <div className="flex flex-col items-center">
+                        <div className="w-8 h-8 rounded-full bg-indigo-600 text-white text-sm font-bold flex items-center justify-center">
+                          {idx + 1}
+                        </div>
                       </div>
-                      <button
-                        onClick={() => handleDeleteStop(stop.id)}
-                        className="text-xs text-gray-400 hover:text-red-500 transition"
-                      >
-                        Delete
-                      </button>
-                    </div>
 
-                    {stop.notes && (
-                      <p className="text-xs text-gray-500 mt-2 italic">{stop.notes}</p>
-                    )}
-
-                    {/* Activities */}
-                    <div className="mt-4 space-y-2">
-                      {(stopActivities[stop.id] || []).map(a => (
-                        <div key={a.id} className="flex items-center gap-3 px-3 py-2 bg-gray-50 rounded-lg">
-                          <span className="text-lg">{TYPE_EMOJI[a.type] || '📌'}</span>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-800 truncate">{a.name}</p>
-                            <p className="text-xs text-gray-500">
-                              {a.scheduled_date ? `${fmtDate(a.scheduled_date)}${a.scheduled_time ? ' · ' + a.scheduled_time : ''}` : 'Unscheduled'}
-                              {a.duration_hours ? ` · ${a.duration_hours}h` : ''}
+                      <div className="flex-1">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <h3 className="font-semibold text-gray-800">
+                              {stop.city_name}<span className="text-gray-400">, {stop.country}</span>
+                            </h3>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              {fmtDate(stop.arrival_date)} → {fmtDate(stop.departure_date)}
                             </p>
                           </div>
-                          <span className="text-xs font-semibold text-gray-700">
-                            ${Number(a.effective_cost).toLocaleString()}
-                          </span>
                           <button
-                            onClick={() => handleRemoveActivity(stop.id, a.id)}
-                            className="text-gray-300 hover:text-red-500 transition text-xs"
-                            aria-label="Remove"
+                            onClick={() => handleDeleteStop(stop.id)}
+                            className="text-xs text-gray-400 hover:text-red-500 transition"
                           >
-                            ✕
+                            Delete
                           </button>
                         </div>
-                      ))}
 
-                      <button
-                        onClick={() => setActivityModalStop(stop)}
-                        className="w-full text-xs text-indigo-600 hover:text-indigo-700 font-medium py-2 border border-dashed border-gray-300 hover:border-indigo-400 rounded-lg transition"
-                      >
-                        + Add activity
-                      </button>
+                        {stop.notes && (
+                          <p className="text-xs text-gray-500 mt-2 italic">{stop.notes}</p>
+                        )}
+
+                        {/* Activities */}
+                        <div className="mt-4 space-y-2">
+                          {(stopActivities[stop.id] || []).map(a => (
+                            <div key={a.id} className="flex items-center gap-3 px-3 py-2 bg-gray-50 rounded-lg">
+                              <span className="text-lg">{TYPE_EMOJI[a.type] || '📌'}</span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-800 truncate">{a.name}</p>
+                                <p className="text-xs text-gray-500">
+                                  {a.scheduled_date ? `${fmtDate(a.scheduled_date)}${a.scheduled_time ? ' · ' + a.scheduled_time : ''}` : 'Unscheduled'}
+                                  {a.duration_hours ? ` · ${a.duration_hours}h` : ''}
+                                </p>
+                              </div>
+                              <span className="text-xs font-semibold text-gray-700">
+                                ${Number(a.effective_cost).toLocaleString()}
+                              </span>
+                              <button
+                                onClick={() => handleRemoveActivity(stop.id, a.id)}
+                                className="text-gray-300 hover:text-red-500 transition text-xs"
+                                aria-label="Remove"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ))}
+
+                          <button
+                            onClick={() => setActivityModalStop(stop)}
+                            className="w-full text-xs text-indigo-600 hover:text-indigo-700 font-medium py-2 border border-dashed border-gray-300 hover:border-indigo-400 rounded-lg transition"
+                          >
+                            + Add activity
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
-            ))}
+
+                  {travel ? (
+                    <TravelConnector info={travel} fromCity={stop.city_name} toCity={next!.city_name} />
+                  ) : next ? (
+                    <div className="flex items-center py-1 px-2">
+                      <div className="w-8 flex justify-center flex-shrink-0">
+                        <div className="w-px bg-gray-200 min-h-[40px]" />
+                      </div>
+                    </div>
+                  ) : null}
+                </React.Fragment>
+              );
+            })}
           </div>
         )}
 
