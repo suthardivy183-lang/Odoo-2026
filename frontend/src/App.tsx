@@ -11,7 +11,8 @@ import BudgetPage      from './pages/BudgetPage';
 import ChecklistPage   from './pages/ChecklistPage';
 import NotesPage       from './pages/NotesPage';
 import SharePage       from './pages/SharePage';
-import ProfilePage     from './pages/ProfilePage';
+import ProfilePage        from './pages/ProfilePage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import NotFoundPage    from './pages/NotFoundPage';
 import ProtectedRoute  from './components/ProtectedRoute';
 
@@ -24,8 +25,9 @@ export default function App() {
     <Routes>
       {/* Public routes */}
       <Route path="/"            element={<Navigate to="/dashboard" replace />} />
-      <Route path="/login"       element={<LoginPage />} />
-      <Route path="/signup"      element={<SignupPage />} />
+      <Route path="/login"          element={<LoginPage />} />
+      <Route path="/signup"         element={<SignupPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/share/:slug" element={<SharePage />} />
 
       {/* Protected routes */}

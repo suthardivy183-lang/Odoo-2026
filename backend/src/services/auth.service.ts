@@ -1,7 +1,7 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import pool from '../database/pool';
-import { RegisterInput, LoginInput, UpdateProfileInput, ChangePasswordInput } from '../validators/auth.validator';
+import { RegisterInput, LoginInput, UpdateProfileInput, ChangePasswordInput, ForgotPasswordInput, ResetPasswordInput } from '../validators/auth.validator';
 
 const SALT_ROUNDS = 12;
 
@@ -114,6 +114,47 @@ export const changePassword = async (id: string, input: ChangePasswordInput) => 
 
 export const deleteAccount = async (id: string) => {
   await pool.query('DELETE FROM users WHERE id = $1', [id]);
+};
+
+export const forgotPassword = async (input: ForgotPasswordInput) => {
+  const result = await pool.query('SELECT id, email FROM users WHERE email = $1', [input.email]);
+  if (!result.rows[0]) {
+    // Don't reveal whether email exists — return same shape
+    return { token: null };
+  }
+  const user = result.rows[0];
+  const token = jwt.sign(
+    { id: user.id, email: user.email, purpose: 'password_reset' },
+    process.env.JWT_SECRET || 'secret',
+    { expiresIn: '15m' } as any
+  );
+  return { token };
+};
+
+export const resetPassword = async (input: ResetPasswordInput) => {
+  let payload: { id: string; purpose: string };
+  try {
+    payload = jwt.verify(input.token, process.env.JWT_SECRET || 'secret') as any;
+  } catch {
+    const err = new Error('Reset token is invalid or has expired') as Error & { status: number };
+    err.status = 400;
+    throw err;
+  }
+  if (payload.purpose !== 'password_reset') {
+    const err = new Error('Invalid reset token') as Error & { status: number };
+    err.status = 400;
+    throw err;
+  }
+  const password_hash = await bcrypt.hash(input.new_password, SALT_ROUNDS);
+  const { rowCount } = await pool.query(
+    'UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2',
+    [password_hash, payload.id]
+  );
+  if (!rowCount) {
+    const err = new Error('User not found') as Error & { status: number };
+    err.status = 404;
+    throw err;
+  }
 };
 
 export const getMe = async (id: string) => {
