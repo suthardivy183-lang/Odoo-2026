@@ -1,7 +1,8 @@
 import { NextFunction, Request, Response } from 'express';
 
+const IS_DEV = process.env.NODE_ENV !== 'production';
 const WINDOW_MS = 15 * 60 * 1000;
-const MAX_REQUESTS = 100;
+const MAX_REQUESTS = IS_DEV ? 2000 : 300;
 
 type RateLimitEntry = {
   count: number;
