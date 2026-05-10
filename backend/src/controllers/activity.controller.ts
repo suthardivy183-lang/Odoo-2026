@@ -38,6 +38,8 @@ export const addToStop = async (req: AuthRequest, res: Response, next: NextFunct
     const activity = await addStopActivity(
       req.params.tripId as string, req.params.stopId as string, req.user!.id, input
     );
+    const io = req.app.get('io');
+    io?.to(`trip:${req.params.tripId}`).emit('trip:changed', { tripId: req.params.tripId, resource: 'activities' });
     res.status(201).json({ success: true, data: { activity } });
   } catch (err) { next(err); }
 };
@@ -58,6 +60,8 @@ export const updateOnStop = async (req: AuthRequest, res: Response, next: NextFu
       req.params.tripId as string, req.params.stopId as string,
       req.params.activityId as string, req.user!.id, input
     );
+    const io = req.app.get('io');
+    io?.to(`trip:${req.params.tripId}`).emit('trip:changed', { tripId: req.params.tripId, resource: 'activities' });
     res.json({ success: true, data: { activity } });
   } catch (err) { next(err); }
 };
@@ -68,6 +72,8 @@ export const removeFromStop = async (req: AuthRequest, res: Response, next: Next
       req.params.tripId as string, req.params.stopId as string,
       req.params.activityId as string, req.user!.id
     );
+    const io = req.app.get('io');
+    io?.to(`trip:${req.params.tripId}`).emit('trip:changed', { tripId: req.params.tripId, resource: 'activities' });
     res.json({ success: true, message: 'Activity removed from stop' });
   } catch (err) { next(err); }
 };

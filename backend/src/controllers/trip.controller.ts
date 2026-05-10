@@ -31,6 +31,8 @@ export const update = async (req: AuthRequest, res: Response, next: NextFunction
   try {
     const input = updateTripSchema.parse(req.body);
     const trip  = await updateTrip(req.params.id as string, req.user!.id, input);
+    const io = req.app.get('io');
+    io?.to(`trip:${req.params.id}`).emit('trip:updated', { tripId: req.params.id, trip });
     res.json({ success: true, data: { trip } });
   } catch (err) { next(err); }
 };
@@ -38,6 +40,8 @@ export const update = async (req: AuthRequest, res: Response, next: NextFunction
 export const remove = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     await deleteTrip(req.params.id as string, req.user!.id);
+    const io = req.app.get('io');
+    io?.to(`trip:${req.params.id}`).emit('trip:deleted', { tripId: req.params.id });
     res.json({ success: true, message: 'Trip deleted' });
   } catch (err) { next(err); }
 };

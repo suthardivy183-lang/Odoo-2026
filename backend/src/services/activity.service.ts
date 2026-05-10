@@ -4,6 +4,7 @@ import {
   AddStopActivityInput,
   UpdateStopActivityInput,
 } from '../validators/activity.validator';
+import { requireTripAccess } from './tripAccess.service';
 
 const makeErr = (msg: string, status: number) => {
   const e = new Error(msg) as Error & { status: number };
@@ -63,12 +64,12 @@ export const getActivityById = async (id: number) => {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 const verifyStopOwnership = async (tripId: string, stopId: string, userId: string) => {
+  await requireTripAccess(tripId, userId);
   const { rows } = await pool.query(
     `SELECT ts.id, ts.city_id
      FROM trip_stops ts
-     JOIN trips t ON t.id = ts.trip_id
-     WHERE ts.id = $1 AND ts.trip_id = $2 AND t.user_id = $3`,
-    [stopId, tripId, userId]
+     WHERE ts.id = $1 AND ts.trip_id = $2`,
+    [stopId, tripId]
   );
   if (!rows[0]) throw makeErr('Stop not found', 404);
   return rows[0];

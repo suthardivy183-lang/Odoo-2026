@@ -67,6 +67,20 @@ export default function CreateTripPage() {
       const res = await api.post('/api/trips', result.data);
       navigate(`/trips/${res.data.data.trip.id}`);
     } catch (err: any) {
+      const apiErrors = err.response?.data?.errors;
+      if (Array.isArray(apiErrors)) {
+        const fieldErrors: FormErrors = {};
+        apiErrors.forEach((issue: { path?: string[]; message?: string }) => {
+          const field = issue.path?.[0] as keyof FormErrors | undefined;
+          if (field && field in form) fieldErrors[field] = issue.message || 'Invalid value';
+        });
+
+        if (Object.keys(fieldErrors).length) {
+          setErrors(fieldErrors);
+          return;
+        }
+      }
+
       setErrors({ root: err.response?.data?.message || 'Failed to create trip' });
     } finally {
       setLoading(false);

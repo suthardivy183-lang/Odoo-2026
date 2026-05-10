@@ -1,5 +1,6 @@
 import pool from '../database/pool';
 import { AddStopInput, UpdateStopInput, ReorderInput } from '../validators/stop.validator';
+import { requireTripAccess } from './tripAccess.service';
 
 const notFound = (msg = 'Stop not found') => {
   const e = new Error(msg) as Error & { status: number };
@@ -8,12 +9,7 @@ const notFound = (msg = 'Stop not found') => {
 };
 
 const verifyTripOwner = async (tripId: string, userId: string) => {
-  const { rows } = await pool.query(
-    `SELECT id, start_date, end_date FROM trips WHERE id = $1 AND user_id = $2`,
-    [tripId, userId]
-  );
-  if (!rows[0]) throw notFound('Trip not found');
-  return rows[0];
+  return requireTripAccess(tripId, userId);
 };
 
 export const addStop = async (tripId: string, userId: string, input: AddStopInput) => {

@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Modal from '../components/Modal';
 import api from '../services/api';
+import { initSocket, joinTripRoom, leaveTripRoom } from '../services/socket';
 
 interface Trip {
   id: string;
@@ -15,6 +16,15 @@ interface Trip {
   cover_photo?: string;
   is_public: boolean;
   public_slug?: string | null;
+  access_role?: 'owner' | 'editor';
+  owner_name?: string;
+}
+
+interface Member {
+  user_id: string;
+  name: string;
+  email: string;
+  role: 'owner' | 'editor';
 }
 
 interface City {
@@ -83,6 +93,11 @@ export default function TripDetailPage() {
   const [stopModalOpen, setStopModalOpen]         = useState(false);
   const [activityModalStop, setActivityModalStop] = useState<Stop | null>(null);
   const [savingShare, setSavingShare] = useState(false);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteError, setInviteError] = useState('');
+  const [inviteMessage, setInviteMessage] = useState('');
+  const [inviting, setInviting] = useState(false);
 
   const loadAll = async () => {
     if (!id) return;
@@ -111,6 +126,42 @@ export default function TripDetailPage() {
 
   useEffect(() => { loadAll(); }, [id]);
 
+  const loadMembers = async () => {
+    if (!id || trip?.access_role !== 'owner') return;
+    try {
+      const res = await api.get(`/api/trips/${id}/members`);
+      setMembers(res.data.data.members);
+    } catch {
+      setMembers([]);
+    }
+  };
+
+  useEffect(() => { loadMembers(); }, [id, trip?.access_role]);
+
+  useEffect(() => {
+    if (!id) return;
+    const socket = initSocket();
+    joinTripRoom(id);
+
+    const onTripChanged = (msg: { tripId: string }) => {
+      if (msg.tripId === id) loadAll();
+    };
+    const onMembersChanged = (msg: { tripId: string }) => {
+      if (msg.tripId === id) loadMembers();
+    };
+
+    socket.on('trip:changed', onTripChanged);
+    socket.on('trip:updated', onTripChanged);
+    socket.on('trip:members:updated', onMembersChanged);
+
+    return () => {
+      socket.off('trip:changed', onTripChanged);
+      socket.off('trip:updated', onTripChanged);
+      socket.off('trip:members:updated', onMembersChanged);
+      leaveTripRoom(id);
+    };
+  }, [id, trip?.access_role]);
+
   const handleDeleteStop = async (stopId: string) => {
     if (!confirm('Delete this stop and all its activities?')) return;
     await api.delete(`/api/trips/${id}/stops/${stopId}`);
@@ -134,6 +185,30 @@ export default function TripDetailPage() {
     } finally {
       setSavingShare(false);
     }
+  };
+
+  const inviteMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inviteEmail.trim()) return;
+    setInviting(true);
+    setInviteError('');
+    setInviteMessage('');
+    try {
+      const res = await api.post(`/api/trips/${id}/members`, { email: inviteEmail });
+      setInviteEmail('');
+      setInviteMessage(`${res.data.data.member.name} can now collaborate on this trip`);
+      await loadMembers();
+    } catch (e: any) {
+      setInviteError(e.response?.data?.message || 'Failed to invite collaborator');
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  const removeMember = async (userId: string) => {
+    if (!confirm('Remove this collaborator from the trip?')) return;
+    await api.delete(`/api/trips/${id}/members/${userId}`);
+    setMembers(prev => prev.filter(m => m.user_id !== userId));
   };
 
   const copyShareUrl = () => {
@@ -201,6 +276,7 @@ export default function TripDetailPage() {
               <button
                 onClick={togglePublic}
                 disabled={savingShare}
+                hidden={trip.access_role !== 'owner'}
                 className={`text-xs font-medium px-3 py-1 rounded-full border transition ${
                   trip.is_public
                     ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
@@ -211,6 +287,12 @@ export default function TripDetailPage() {
               </button>
             </div>
           </div>
+
+          {trip.access_role === 'editor' && (
+            <div className="mb-4 px-3 py-2 bg-emerald-50 border border-emerald-100 rounded-lg text-xs text-emerald-700">
+              Shared with you by {trip.owner_name || 'the trip owner'}.
+            </div>
+          )}
 
           {trip.is_public && trip.public_slug && (
             <div className="flex items-center gap-2 px-3 py-2 bg-indigo-50 border border-indigo-100 rounded-lg text-xs">
@@ -246,6 +328,63 @@ export default function TripDetailPage() {
             </div>
           </div>
         </div>
+
+        {trip.access_role === 'owner' && (
+          <div className="bg-white rounded-2xl border border-gray-200 p-5 mb-6">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+              <div>
+                <h2 className="text-base font-semibold text-gray-800">Tripmates</h2>
+                <p className="text-xs text-gray-400 mt-1">Invite registered users to view and edit this trip.</p>
+              </div>
+              <form onSubmit={inviteMember} className="flex gap-2 sm:min-w-80">
+                <input
+                  type="email"
+                  value={inviteEmail}
+                  onChange={e => {
+                    setInviteEmail(e.target.value);
+                    setInviteError('');
+                    setInviteMessage('');
+                  }}
+                  placeholder="friend@example.com"
+                  className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                />
+                <button
+                  type="submit"
+                  disabled={inviting || !inviteEmail.trim()}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white rounded-lg text-sm font-semibold transition"
+                >
+                  {inviting ? 'Inviting...' : 'Invite'}
+                </button>
+              </form>
+            </div>
+
+            {(inviteError || inviteMessage) && (
+              <p className={`text-xs mt-3 ${inviteError ? 'text-red-600' : 'text-emerald-600'}`}>
+                {inviteError || inviteMessage}
+              </p>
+            )}
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              {members.map(member => (
+                <div key={member.user_id} className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-100 rounded-lg">
+                  <div>
+                    <p className="text-xs font-semibold text-gray-700">{member.name}</p>
+                    <p className="text-[11px] text-gray-400">{member.email} · {member.role}</p>
+                  </div>
+                  {member.role !== 'owner' && (
+                    <button
+                      onClick={() => removeMember(member.user_id)}
+                      className="text-gray-300 hover:text-red-500 text-xs transition"
+                      aria-label="Remove collaborator"
+                    >
+                      x
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Itinerary */}
         <div className="flex items-center justify-between mb-4">

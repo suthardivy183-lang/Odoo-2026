@@ -1,5 +1,6 @@
 import pool from '../database/pool';
 import { CreateNoteInput, UpdateNoteInput } from '../validators/notes.validator';
+import { requireTripAccess } from './tripAccess.service';
 
 const makeErr = (msg: string, status: number) => {
   const e = new Error(msg) as Error & { status: number };
@@ -8,11 +9,7 @@ const makeErr = (msg: string, status: number) => {
 };
 
 const verifyTripOwner = async (tripId: string, userId: string) => {
-  const { rows } = await pool.query(
-    `SELECT id FROM trips WHERE id = $1 AND user_id = $2`,
-    [tripId, userId]
-  );
-  if (!rows[0]) throw makeErr('Trip not found', 404);
+  await requireTripAccess(tripId, userId);
 };
 
 export const getNotes = async (tripId: string, userId: string, stopId?: string) => {
