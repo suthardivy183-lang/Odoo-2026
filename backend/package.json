@@ -4,10 +4,12 @@
   "description": "Odoo Hackathon 2026 Backend",
   "main": "dist/server.js",
   "scripts": {
-    "dev": "nodemon --exec ts-node src/server.ts",
-    "build": "tsc",
-    "start": "node dist/server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev":     "nodemon --exec ts-node src/server.ts",
+    "build":   "tsc",
+    "start":   "node dist/server.js",
+    "migrate": "ts-node src/database/migrate.ts",
+    "seed":    "ts-node src/database/seed.ts",
+    "test":    "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "",

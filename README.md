@@ -1,143 +1,127 @@
-# Odoo Hackathon 2026
+# Traveloop
 
-A full-stack solution for the Odoo Hackathon 2026, built with React, Node.js, and PostgreSQL.
+A full-stack travel planning app for the Odoo × Parul University Hackathon 2026.
+Plan trips, build itineraries with stops and activities, track budget, manage
+packing checklists, jot down notes, and share trips publicly via a slug URL.
+
+Live updates are pushed over Socket.io so multiple clients viewing the same trip
+stay in sync.
 
 ## Tech Stack
 
-- **Frontend**: React 18 + TypeScript + Vite
+- **Frontend**: React 19 + Vite + TypeScript + Tailwind CSS 4 + React Router
 - **Backend**: Node.js + Express + TypeScript
-- **Database**: PostgreSQL
-- **Real-time**: Socket.io
-- **Validation**: Zod
-- **Authentication**: JWT
+- **Database**: PostgreSQL 15 (UUID PKs, indexed FKs, `updated_at` triggers)
+- **Real-time**: Socket.io (per-trip rooms)
+- **Validation**: Zod on every endpoint
+- **Auth**: JWT + bcrypt (12 salt rounds)
 
-## Project Structure
+## Repository Layout
 
 ```
 Odoo-2026/
-├── backend/          # Express server with TypeScript
+├── backend/
 │   ├── src/
-│   │   ├── routes/
-│   │   ├── controllers/
-│   │   ├── models/
-│   │   ├── services/
-│   │   ├── middleware/
-│   │   ├── validators/
-│   │   ├── database/
+│   │   ├── routes/         # express routers, mounted in server.ts
+│   │   ├── controllers/    # parse req → call service → send response
+│   │   ├── services/       # business logic + SQL
+│   │   ├── validators/     # Zod schemas (one per resource)
+│   │   ├── middleware/     # auth, error handler
+│   │   ├── database/       # pool, migrations, seeds
 │   │   └── server.ts
-│   └── package.json
-├── frontend/         # React app with Vite
+│   └── .env.example
+├── frontend/
 │   ├── src/
-│   │   ├── components/
-│   │   ├── pages/
-│   │   ├── hooks/
-│   │   ├── context/
-│   │   ├── services/
-│   │   └── utils/
-│   └── package.json
+│   │   ├── pages/          # one per route
+│   │   ├── components/     # reusable UI (Navbar, Modal, TripCard, ...)
+│   │   ├── context/        # AuthContext
+│   │   ├── services/       # api.ts (axios), socket.ts
+│   │   └── App.tsx         # route table
+│   └── .env.example
 └── README.md
 ```
 
-## Setup Instructions
+## Setup
 
-### Backend Setup
+### Prerequisites
 
-1. Navigate to backend directory:
+- Node.js 20+
+- PostgreSQL 15+ running locally (or accessible via `DATABASE_URL`)
+
+### Backend
+
 ```bash
 cd backend
-```
-
-2. Create `.env` file:
-```bash
 cp .env.example .env
-```
-
-3. Configure your environment variables (PostgreSQL credentials, JWT secret, etc.)
-
-4. Install dependencies:
-```bash
+# Edit .env: set DATABASE_URL and JWT_SECRET
 npm install
+npm run migrate     # creates schema (001_init.sql)
+npm run seed        # loads 25 cities + 60 activities (002_seed.sql)
+npm run dev         # starts http://localhost:3001
 ```
 
-5. Start development server:
-```bash
-npm run dev
-```
+### Frontend
 
-Backend will run on `http://localhost:5000`
-
-### Frontend Setup
-
-1. Navigate to frontend directory:
 ```bash
 cd frontend
-```
-
-2. Create `.env.local` file:
-```bash
-cp .env.example .env.local
-```
-
-3. Install dependencies:
-```bash
+cp .env.example .env
 npm install
+npm run dev         # starts http://localhost:5173
 ```
 
-4. Start development server:
-```bash
-npm run dev
-```
+Open http://localhost:5173, sign up, and start planning.
 
-Frontend will run on `http://localhost:5173`
+## API Surface
 
-## Development
+All `/api/trips/*` and nested routes require `Authorization: Bearer <jwt>`.
 
-Both frontend and backend support hot reloading during development.
+| Method | Path                                                | Purpose                              |
+|--------|-----------------------------------------------------|--------------------------------------|
+| POST   | `/api/auth/register`                                | Create account, returns JWT          |
+| POST   | `/api/auth/login`                                   | Login, returns JWT                   |
+| GET    | `/api/auth/me`                                      | Current user                         |
+| GET    | `/api/trips` · `POST /api/trips`                    | List / create trips                  |
+| GET/PUT/DELETE | `/api/trips/:id`                            | Trip CRUD (auto-creates budget row)  |
+| GET/POST | `/api/trips/:id/stops` · `PATCH /reorder`         | Stops + reorder transaction          |
+| PUT/DELETE | `/api/trips/:id/stops/:stopId`                  | Update / delete stop                 |
+| GET    | `/api/cities` · `/api/cities/:id`                   | Browse cities + activities           |
+| GET    | `/api/activities` (public)                          | Filter by city, type, cost range     |
+| GET/POST/PUT/DELETE | `/api/trips/:id/stops/:stopId/activities` | Stop activities w/ effective cost    |
+| GET/PUT | `/api/trips/:id/budget`                            | Breakdown + computed totals          |
+| GET/POST/PUT/DELETE | `/api/trips/:id/checklist`             | Packing list + toggle endpoint       |
+| GET/POST/PUT/DELETE | `/api/trips/:id/notes`                 | Notes (general or per stop)          |
+| GET    | `/api/public/trips/:slug` (no auth)                 | Read-only shared itinerary           |
 
-### Backend Development
-- TypeScript compilation with strict mode
-- Automatic restart with nodemon
-- Socket.io for real-time features
+### Socket.io events
 
-### Frontend Development
-- Vite for fast module replacement
-- TypeScript for type safety
-- Modular component structure
+- `trip:join` / `trip:leave` (client → server) — join a trip's broadcast room
+- `budget:updated` (server → room) — fired after every successful PUT to a trip's budget
 
-## Features
+## Frontend Routes
 
-- **Authentication**: JWT-based user authentication
-- **Real-time Updates**: Socket.io for real-time data synchronization
-- **Input Validation**: Zod schema validation
-- **Error Handling**: Centralized error handling middleware
-- **Modular Architecture**: Clean separation of concerns
+| Path                            | Auth | Page                      |
+|---------------------------------|------|---------------------------|
+| `/login`, `/signup`             | —    | Auth                      |
+| `/dashboard`                    | ✓    | Stats + recent trips      |
+| `/trips`                        | ✓    | All trips with filters    |
+| `/trips/new`                    | ✓    | Create trip form          |
+| `/trips/:id`                    | ✓    | Itinerary builder         |
+| `/trips/:id/budget`             | ✓    | Donut chart + categories  |
+| `/trips/:id/checklist`          | ✓    | Grouped packing list      |
+| `/trips/:id/notes`              | ✓    | Notes with stop filters   |
+| `/cities` · `/cities/:id`       | ✓    | Explore + city detail     |
+| `/share/:slug`                  | —    | Public read-only trip     |
 
-## Key Constraints
+## Hackathon Constraints
 
-- ✅ PostgreSQL (no Firebase/Supabase)
-- ✅ Minimal third-party APIs
-- ✅ Real-time and dynamic data
-- ✅ Robust input validation
-- ✅ JWT authentication
-- ✅ Proper database indexing
+- ✅ PostgreSQL only (no Firebase / Supabase)
+- ✅ No third-party APIs
+- ✅ Zod validation on every endpoint
+- ✅ JWT authentication with bcrypt password hashing
+- ✅ Real-time updates via Socket.io
+- ✅ Indexed schema (38 indexes), FK cascades, `updated_at` triggers
+- ✅ Modular routes / controllers / services / validators
 
-## Evaluation Criteria
+## Repository
 
-This solution is built to excel in:
-- Coding standards and patterns
-- Logic and debugging
-- Modularity and architecture
-- Database design
-- Frontend design and UX
-- Performance and scalability
-- Security
-- Usability
-
-## Team Information
-
-- **Repository**: https://github.com/suthardivy183-lang/Odoo-2026
-- **Team Leader**: To be confirmed on hackathon portal
-
-## License
-
-MIT
+https://github.com/suthardivy183-lang/Odoo-2026

@@ -18,6 +18,9 @@ const io = new SocketIOServer(httpServer, {
   },
 });
 
+// Make io accessible to controllers via app.get('io')
+app.set('io', io);
+
 // Middleware
 app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:5173' }));
 app.use(express.json());
@@ -37,6 +40,7 @@ import { activityRouter, stopActivityRouter } from './routes/activity.routes';
 import budgetRoutes from './routes/budget.routes';
 import checklistRoutes from './routes/checklist.routes';
 import notesRoutes from './routes/notes.routes';
+import publicRoutes from './routes/public.routes';
 app.use('/api/auth',                                          authRoutes);
 app.use('/api/trips',                                         tripRoutes);
 app.use('/api/trips/:tripId/stops',                           stopRoutes);
@@ -46,10 +50,23 @@ app.use('/api/trips/:tripId/stops/:stopId/activities',        stopActivityRouter
 app.use('/api/trips/:tripId/budget',                          budgetRoutes);
 app.use('/api/trips/:tripId/checklist',                       checklistRoutes);
 app.use('/api/trips/:tripId/notes',                           notesRoutes);
+app.use('/api/public',                                        publicRoutes);
 
-// Socket.IO events
+// Socket.IO events — clients join trip-scoped rooms to receive live updates
 io.on('connection', (socket) => {
   logger.info(`User connected: ${socket.id}`);
+
+  socket.on('trip:join', (tripId: string) => {
+    if (typeof tripId === 'string' && tripId.length > 0) {
+      socket.join(`trip:${tripId}`);
+    }
+  });
+
+  socket.on('trip:leave', (tripId: string) => {
+    if (typeof tripId === 'string' && tripId.length > 0) {
+      socket.leave(`trip:${tripId}`);
+    }
+  });
 
   socket.on('disconnect', () => {
     logger.info(`User disconnected: ${socket.id}`);
@@ -59,7 +76,7 @@ io.on('connection', (socket) => {
 // Error handler (must be last)
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 3001;
 
 httpServer.listen(PORT, async () => {
   logger.info(`Server running on http://localhost:${PORT}`);
