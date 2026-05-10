@@ -11,6 +11,7 @@ import BudgetPage      from './pages/BudgetPage';
 import ChecklistPage   from './pages/ChecklistPage';
 import NotesPage       from './pages/NotesPage';
 import SharePage       from './pages/SharePage';
+import ProfilePage     from './pages/ProfilePage';
 import NotFoundPage    from './pages/NotFoundPage';
 import ProtectedRoute  from './components/ProtectedRoute';
 
@@ -39,6 +40,8 @@ export default function App() {
       <Route path="/trips/:id/budget"    element={<P><BudgetPage /></P>} />
       <Route path="/trips/:id/checklist" element={<P><ChecklistPage /></P>} />
       <Route path="/trips/:id/notes"     element={<P><NotesPage /></P>} />
+
+      <Route path="/profile" element={<P><ProfilePage /></P>} />
 
       {/* 404 — must be last */}
       <Route path="*" element={<NotFoundPage />} />

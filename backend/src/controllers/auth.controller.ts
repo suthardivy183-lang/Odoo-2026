@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
-import { registerSchema, loginSchema } from '../validators/auth.validator';
-import { registerUser, loginUser, getMe } from '../services/auth.service';
+import { registerSchema, loginSchema, updateProfileSchema, changePasswordSchema } from '../validators/auth.validator';
+import { registerUser, loginUser, getMe, updateProfile, changePassword, deleteAccount } from '../services/auth.service';
 import { AuthRequest } from '../middleware/auth';
 
 export const register = async (req: Request, res: Response, next: NextFunction) => {
@@ -27,6 +27,35 @@ export const me = async (req: AuthRequest, res: Response, next: NextFunction) =>
   try {
     const user = await getMe(req.user!.id);
     res.json({ success: true, data: { user } });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const updateProfileController = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const input = updateProfileSchema.parse(req.body);
+    const user  = await updateProfile(req.user!.id, input);
+    res.json({ success: true, data: { user } });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const changePasswordController = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const input = changePasswordSchema.parse(req.body);
+    await changePassword(req.user!.id, input);
+    res.json({ success: true, message: 'Password updated successfully' });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const deleteAccountController = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    await deleteAccount(req.user!.id);
+    res.json({ success: true, message: 'Account deleted' });
   } catch (err) {
     next(err);
   }
