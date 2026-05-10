@@ -152,10 +152,8 @@ export default function BudgetPage() {
         miscellaneous_cost: Number(form.miscellaneous_cost) || 0,
         currency,
       });
-      const fresh: Budget = res.data.data.budget;
-      // Re-fetch to get updated breakdown_total + activities_total
-      const refreshed = await api.get(`/api/trips/${id}/budget`);
-      setBudget(refreshed.data.data.budget);
+      // Server returns the recomputed budget with breakdown_total + activities_total
+      setBudget(res.data.data.budget);
       setSavedAt(Date.now());
     } catch (e: any) {
       setErr(e.response?.data?.message || 'Failed to save');
