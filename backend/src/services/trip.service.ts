@@ -139,6 +139,52 @@ export const updateTrip = async (id: string, userId: string, input: UpdateTripIn
   return rows[0];
 };
 
+export const getPublicTrip = async (slug: string) => {
+  const { rows } = await pool.query(
+    `SELECT t.id, t.name, t.description, t.start_date, t.end_date,
+            t.cover_photo, t.total_budget, t.status, t.public_slug,
+            u.name AS owner_name
+     FROM trips t
+     JOIN users u ON u.id = t.user_id
+     WHERE t.public_slug = $1 AND t.is_public = TRUE`,
+    [slug]
+  );
+  if (!rows[0]) throw notFound('Trip not found or not public');
+
+  const trip = rows[0];
+
+  // Attach stops with their activities
+  const { rows: stops } = await pool.query(
+    `SELECT ts.*,
+            c.name AS city_name, c.country, c.region, c.image_url,
+            COALESCE(
+              json_agg(
+                json_build_object(
+                  'id', sa.id,
+                  'activity_id', sa.activity_id,
+                  'name', a.name,
+                  'type', a.type,
+                  'duration_hours', a.duration_hours,
+                  'scheduled_date', sa.scheduled_date,
+                  'scheduled_time', sa.scheduled_time,
+                  'effective_cost', COALESCE(sa.custom_cost, a.cost)
+                ) ORDER BY sa.scheduled_date, sa.scheduled_time
+              ) FILTER (WHERE sa.id IS NOT NULL),
+              '[]'
+            ) AS activities
+     FROM trip_stops ts
+     JOIN cities c ON c.id = ts.city_id
+     LEFT JOIN stop_activities sa ON sa.stop_id = ts.id
+     LEFT JOIN activities a ON a.id = sa.activity_id
+     WHERE ts.trip_id = $1
+     GROUP BY ts.id, c.id
+     ORDER BY ts.stop_order ASC`,
+    [trip.id]
+  );
+
+  return { ...trip, stops };
+};
+
 export const deleteTrip = async (id: string, userId: string) => {
   const { rowCount } = await pool.query(
     `DELETE FROM trips WHERE id = $1 AND user_id = $2`,

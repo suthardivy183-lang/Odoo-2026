@@ -37,6 +37,7 @@ import { activityRouter, stopActivityRouter } from './routes/activity.routes';
 import budgetRoutes from './routes/budget.routes';
 import checklistRoutes from './routes/checklist.routes';
 import notesRoutes from './routes/notes.routes';
+import publicRoutes from './routes/public.routes';
 app.use('/api/auth',                                          authRoutes);
 app.use('/api/trips',                                         tripRoutes);
 app.use('/api/trips/:tripId/stops',                           stopRoutes);
@@ -46,6 +47,7 @@ app.use('/api/trips/:tripId/stops/:stopId/activities',        stopActivityRouter
 app.use('/api/trips/:tripId/budget',                          budgetRoutes);
 app.use('/api/trips/:tripId/checklist',                       checklistRoutes);
 app.use('/api/trips/:tripId/notes',                           notesRoutes);
+app.use('/api/public',                                        publicRoutes);
 
 // Socket.IO events
 io.on('connection', (socket) => {
