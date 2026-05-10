@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import api from '../services/api';
+import { initSocket, joinTripRoom, leaveTripRoom } from '../services/socket';
 
 interface Budget {
   id: string;
@@ -42,6 +43,10 @@ export default function BudgetPage() {
   const [saving, setSaving]     = useState(false);
   const [savedAt, setSavedAt]   = useState<number | null>(null);
   const [err, setErr]           = useState('');
+  const [liveFlash, setLiveFlash] = useState(false);
+
+  // Track if user is currently editing — if so, don't overwrite their form
+  const isDirtyRef = useRef(false);
 
   useEffect(() => {
     if (!id) return;
@@ -98,6 +103,38 @@ export default function BudgetPage() {
         || currency !== budget.currency;
   }, [form, currency, budget]);
 
+  useEffect(() => { isDirtyRef.current = isDirty; }, [isDirty]);
+
+  // ── Live updates via Socket.io ────────────────────────────────────────────
+  useEffect(() => {
+    if (!id) return;
+    const socket = initSocket();
+    joinTripRoom(id);
+
+    const onBudgetUpdate = (msg: { tripId: string; budget: Budget }) => {
+      if (msg.tripId !== id) return;
+      setBudget(msg.budget);
+      // Only sync the form fields if the user has no unsaved local edits
+      if (!isDirtyRef.current) {
+        setForm({
+          transport_cost:     String(Number(msg.budget.transport_cost     ?? 0)),
+          accommodation_cost: String(Number(msg.budget.accommodation_cost ?? 0)),
+          meals_cost:         String(Number(msg.budget.meals_cost         ?? 0)),
+          miscellaneous_cost: String(Number(msg.budget.miscellaneous_cost ?? 0)),
+        });
+        setCurrency(msg.budget.currency || 'USD');
+      }
+      setLiveFlash(true);
+      setTimeout(() => setLiveFlash(false), 1200);
+    };
+
+    socket.on('budget:updated', onBudgetUpdate);
+    return () => {
+      socket.off('budget:updated', onBudgetUpdate);
+      leaveTripRoom(id);
+    };
+  }, [id]);
+
   const handleChange = (k: CatKey, v: string) => {
     if (v !== '' && Number(v) < 0) return;
     setForm(f => ({ ...f, [k]: v }));
@@ -150,7 +187,18 @@ export default function BudgetPage() {
         </div>
 
         <div className="flex items-baseline justify-between mb-6">
-          <h1 className="text-2xl font-bold text-gray-800">Budget</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-gray-800">Budget</h1>
+            <span
+              className={`flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full transition-colors ${
+                liveFlash ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+              }`}
+              title={liveFlash ? 'Just received a live update' : 'Live updates active'}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${liveFlash ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
+              {liveFlash ? 'Live update' : 'Live'}
+            </span>
+          </div>
           <span className="text-sm text-gray-400">{currency}</span>
         </div>
 
