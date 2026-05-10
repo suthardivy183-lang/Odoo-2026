@@ -62,14 +62,12 @@ interface Expense {
   splits: ExpenseSplit[];
 }
 
-const CATEGORIES = [
-  { key: 'transport_cost',     label: 'Transport',     emoji: '✈️', color: '#6366f1' },
-  { key: 'accommodation_cost', label: 'Accommodation', emoji: '🏨', color: '#10b981' },
-  { key: 'meals_cost',         label: 'Meals',         emoji: '🍽️', color: '#f59e0b' },
-  { key: 'miscellaneous_cost', label: 'Miscellaneous', emoji: '🎒', color: '#ec4899' },
+const EDIT_CATS = [
+  { key: 'meals_cost' as const,         label: 'Meals',         emoji: '🍽️', color: '#f59e0b' },
+  { key: 'miscellaneous_cost' as const, label: 'Miscellaneous', emoji: '🎒', color: '#ec4899' },
 ] as const;
 
-type CatKey = typeof CATEGORIES[number]['key'];
+type CatKey = typeof EDIT_CATS[number]['key'];
 
 const EXPENSE_CATEGORIES = ['transport', 'accommodation', 'meals', 'activities', 'miscellaneous'] as const;
 
@@ -78,7 +76,7 @@ export default function BudgetPage() {
   const [trip,   setTrip]   = useState<Trip | null>(null);
   const [budget, setBudget] = useState<Budget | null>(null);
   const [form,   setForm]   = useState<Record<CatKey, string>>({
-    transport_cost: '', accommodation_cost: '', meals_cost: '', miscellaneous_cost: '',
+    meals_cost: '', miscellaneous_cost: '',
   });
   const [currency, setCurrency] = useState('USD');
   const [loading, setLoading]   = useState(true);
@@ -115,8 +113,6 @@ export default function BudgetPage() {
         const b: Budget = budRes.data.data.budget;
         setBudget(b);
         setForm({
-          transport_cost:     String(Number(b.transport_cost     ?? 0)),
-          accommodation_cost: String(Number(b.accommodation_cost ?? 0)),
           meals_cost:         String(Number(b.meals_cost         ?? 0)),
           miscellaneous_cost: String(Number(b.miscellaneous_cost ?? 0)),
         });
@@ -134,39 +130,48 @@ export default function BudgetPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  // Live totals from form (not yet saved)
-  const liveBreakdown = useMemo(() => {
-    return CATEGORIES.reduce((sum, c) => sum + (Number(form[c.key]) || 0), 0);
-  }, [form]);
-
   const activitiesTotal   = Number(budget?.activities_total   ?? 0);
   const lodgingTotal      = Number(budget?.lodging_total      ?? 0);
   const reservationsTotal = Number(budget?.reservations_total ?? 0);
   const expensesTotal     = expenses.reduce((sum, expense) => sum + Number(expense.converted_amount || 0), 0);
   const totalBudget       = Number(budget?.total_budget ?? 0);
-  const totalSpent        = liveBreakdown + activitiesTotal + lodgingTotal + reservationsTotal + expensesTotal;
-  const remaining       = totalBudget - totalSpent;
-  const usedPct         = totalBudget > 0 ? Math.min(100, (totalSpent / totalBudget) * 100) : 0;
-  const overBudget      = totalBudget > 0 && totalSpent > totalBudget;
+  const mealsVal          = Number(form.meals_cost) || 0;
+  const miscVal           = Number(form.miscellaneous_cost) || 0;
+  const totalSpent        = mealsVal + miscVal + activitiesTotal + lodgingTotal + reservationsTotal + expensesTotal;
+  const remaining         = totalBudget - totalSpent;
+  const overBudget        = totalBudget > 0 && totalSpent > totalBudget;
 
-  // Donut chart segments (conic-gradient)
+  // All spending sources for the donut (auto-tracked + manually editable)
+  const allSources = useMemo(() => [
+    { label: 'Activities',     value: activitiesTotal,   color: '#8b5cf6', emoji: '🎯' },
+    { label: 'Lodging',        value: lodgingTotal,      color: '#10b981', emoji: '🏨' },
+    { label: 'Reservations',   value: reservationsTotal, color: '#3b82f6', emoji: '🎫' },
+    { label: 'Meals',          value: mealsVal,          color: '#f59e0b', emoji: '🍽️' },
+    { label: 'Miscellaneous',  value: miscVal,           color: '#ec4899', emoji: '🎒' },
+    { label: 'Group Expenses', value: expensesTotal,     color: '#6366f1', emoji: '🧾' },
+  ], [activitiesTotal, lodgingTotal, reservationsTotal, mealsVal, miscVal, expensesTotal]);
+
+  // Donut: segments as % of totalBudget (with remaining gray) or % of totalSpent when no budget set
   const conicGradient = useMemo(() => {
-    if (liveBreakdown === 0) return 'conic-gradient(#e5e7eb 0% 100%)';
+    const basis = totalBudget > 0 ? totalBudget : totalSpent;
+    if (basis === 0) return 'conic-gradient(#e5e7eb 0% 100%)';
     const stops: string[] = [];
     let acc = 0;
-    CATEGORIES.forEach(c => {
-      const val = Number(form[c.key]) || 0;
-      if (val === 0) return;
-      const pct = (val / liveBreakdown) * 100;
-      stops.push(`${c.color} ${acc}% ${acc + pct}%`);
+    allSources.forEach(src => {
+      if (src.value <= 0) return;
+      const pct = (src.value / basis) * 100;
+      stops.push(`${src.color} ${acc.toFixed(3)}% ${(acc + pct).toFixed(3)}%`);
       acc += pct;
     });
-    return `conic-gradient(${stops.join(', ')})`;
-  }, [form, liveBreakdown]);
+    if (totalBudget > 0 && acc < 99.9) {
+      stops.push(`#e5e7eb ${acc.toFixed(3)}% 100%`);
+    }
+    return stops.length > 0 ? `conic-gradient(${stops.join(', ')})` : 'conic-gradient(#e5e7eb 0% 100%)';
+  }, [allSources, totalBudget, totalSpent]);
 
   const isDirty = useMemo(() => {
     if (!budget) return false;
-    return CATEGORIES.some(c => Number(form[c.key]) !== Number(budget[c.key as keyof Budget]))
+    return EDIT_CATS.some(c => Number(form[c.key]) !== Number(budget[c.key as keyof Budget]))
         || currency !== budget.currency;
   }, [form, currency, budget]);
 
@@ -184,8 +189,6 @@ export default function BudgetPage() {
       // Only sync the form fields if the user has no unsaved local edits
       if (!isDirtyRef.current) {
         setForm({
-          transport_cost:     String(Number(msg.budget.transport_cost     ?? 0)),
-          accommodation_cost: String(Number(msg.budget.accommodation_cost ?? 0)),
           meals_cost:         String(Number(msg.budget.meals_cost         ?? 0)),
           miscellaneous_cost: String(Number(msg.budget.miscellaneous_cost ?? 0)),
         });
@@ -227,8 +230,8 @@ export default function BudgetPage() {
     setErr('');
     try {
       const res = await api.put(`/api/trips/${id}/budget`, {
-        transport_cost:     Number(form.transport_cost)     || 0,
-        accommodation_cost: Number(form.accommodation_cost) || 0,
+        transport_cost:     0,
+        accommodation_cost: 0,
         meals_cost:         Number(form.meals_cost)         || 0,
         miscellaneous_cost: Number(form.miscellaneous_cost) || 0,
         currency,
@@ -348,52 +351,83 @@ export default function BudgetPage() {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* ─── Donut chart ──────────────────────────────── */}
-          <div className="bg-white rounded-2xl border border-gray-200 p-6 lg:col-span-1">
-            <h2 className="text-sm font-semibold text-gray-700 mb-4">Breakdown</h2>
+          {/* ─── Budget overview donut ─────────────────────── */}
+          <div className="bg-white rounded-2xl border border-gray-200 p-6 lg:col-span-2">
+            <h2 className="text-sm font-semibold text-gray-700 mb-5">Budget overview</h2>
 
-            <div className="flex justify-center mb-4">
-              <div
-                className="relative w-40 h-40 rounded-full"
-                style={{ background: conicGradient }}
-              >
-                <div className="absolute inset-4 bg-white rounded-full flex flex-col items-center justify-center">
-                  <p className="text-xs text-gray-400">Categories</p>
-                  <p className="text-lg font-bold text-gray-800">
-                    ${liveBreakdown.toLocaleString()}
-                  </p>
+            <div className="flex flex-col sm:flex-row gap-6 items-start">
+              {/* Donut */}
+              <div className="flex-shrink-0 flex flex-col items-center gap-2">
+                <div
+                  className="relative w-44 h-44 rounded-full"
+                  style={{ background: conicGradient }}
+                >
+                  <div className="absolute inset-5 bg-white rounded-full flex flex-col items-center justify-center text-center">
+                    <p className="text-[10px] text-gray-400 uppercase tracking-wide">Total spent</p>
+                    <p className={`text-xl font-bold leading-tight ${overBudget ? 'text-red-600' : 'text-gray-800'}`}>
+                      ${totalSpent.toLocaleString()}
+                    </p>
+                    {totalBudget > 0 && (
+                      <>
+                        <p className="text-[10px] text-gray-400 mt-0.5">of ${totalBudget.toLocaleString()}</p>
+                        {overBudget && (
+                          <p className="text-[10px] text-red-500 font-semibold mt-0.5">Over budget!</p>
+                        )}
+                      </>
+                    )}
+                  </div>
                 </div>
+                {totalBudget === 0 && (
+                  <p className="text-[11px] text-gray-400 text-center">Set a budget on the trip to see usage</p>
+                )}
+              </div>
+
+              {/* Legend — all spending sources */}
+              <div className="flex-1 w-full">
+                <ul className="space-y-2.5">
+                  {allSources.map(src => {
+                    const basis = totalBudget > 0 ? totalBudget : totalSpent;
+                    const pct = basis > 0 ? (src.value / basis) * 100 : 0;
+                    return (
+                      <li key={src.label} className="flex items-center gap-2.5 text-sm">
+                        <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: src.color }} />
+                        <span className="text-gray-500 w-4">{src.emoji}</span>
+                        <span className="flex-1 text-gray-600">{src.label}</span>
+                        <span className="font-semibold text-gray-800 tabular-nums">
+                          ${src.value.toLocaleString()}
+                        </span>
+                        <span className="text-gray-400 text-xs w-10 text-right tabular-nums">
+                          {pct > 0 ? `${pct.toFixed(0)}%` : '—'}
+                        </span>
+                      </li>
+                    );
+                  })}
+                  {totalBudget > 0 && (
+                    <li className="flex items-center gap-2.5 text-sm border-t border-gray-100 pt-2.5 mt-1">
+                      <span className="w-3 h-3 rounded-sm flex-shrink-0 bg-gray-200" />
+                      <span className="text-gray-500 w-4">⬜</span>
+                      <span className="flex-1 text-gray-500">Remaining</span>
+                      <span className={`font-semibold tabular-nums ${overBudget ? 'text-red-600' : 'text-emerald-600'}`}>
+                        {overBudget ? '-' : ''}${Math.abs(remaining).toLocaleString()}
+                      </span>
+                      <span className="text-gray-400 text-xs w-10 text-right tabular-nums">
+                        {totalBudget > 0 ? `${Math.min(100, Math.abs(remaining / totalBudget) * 100).toFixed(0)}%` : '—'}
+                      </span>
+                    </li>
+                  )}
+                </ul>
               </div>
             </div>
-
-            <ul className="space-y-2">
-              {CATEGORIES.map(c => {
-                const val = Number(form[c.key]) || 0;
-                const pct = liveBreakdown > 0 ? (val / liveBreakdown) * 100 : 0;
-                return (
-                  <li key={c.key} className="flex items-center gap-2 text-xs">
-                    <span className="w-3 h-3 rounded-sm" style={{ background: c.color }} />
-                    <span className="flex-1 text-gray-600">{c.label}</span>
-                    <span className="font-medium text-gray-700">
-                      ${val.toLocaleString()}
-                    </span>
-                    <span className="text-gray-400 w-10 text-right">
-                      {pct.toFixed(0)}%
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
           </div>
 
-          {/* ─── Editable categories ──────────────────────── */}
-          <div className="bg-white rounded-2xl border border-gray-200 p-6 lg:col-span-2">
-            <h2 className="text-sm font-semibold text-gray-700 mb-4">Edit categories</h2>
+          {/* ─── Editable: meals, misc, currency ──────────── */}
+          <div className="bg-white rounded-2xl border border-gray-200 p-6">
+            <h2 className="text-sm font-semibold text-gray-700 mb-4">Adjust</h2>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {CATEGORIES.map(c => (
+            <div className="space-y-4">
+              {EDIT_CATS.map(c => (
                 <div key={c.key}>
-                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
+                  <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1">
                     <span>{c.emoji}</span> {c.label}
                   </label>
                   <div className="relative">
@@ -416,7 +450,7 @@ export default function BudgetPage() {
               <select
                 value={currency}
                 onChange={e => { setCurrency(e.target.value); setSavedAt(null); }}
-                className="w-36 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
               >
                 {CURRENCIES.map(c => (
                   <option key={c} value={c}>{c}</option>
@@ -428,87 +462,17 @@ export default function BudgetPage() {
               <button
                 onClick={handleSave}
                 disabled={!isDirty || saving}
-                className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed text-white text-sm font-semibold px-5 py-2 rounded-lg transition"
+                className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed text-white text-sm font-semibold px-5 py-2 rounded-lg transition"
               >
                 {saving ? 'Saving…' : 'Save changes'}
               </button>
               {savedAt && !isDirty && (
                 <span className="text-xs text-green-600 font-medium">✓ Saved</span>
               )}
-              {isDirty && !saving && (
-                <span className="text-xs text-amber-600">Unsaved changes</span>
-              )}
             </div>
-          </div>
-        </div>
-
-        {/* ─── Total spend vs budget ──────────────────────── */}
-        <div className="mt-6 bg-white rounded-2xl border border-gray-200 p-6">
-          <div className="flex items-baseline justify-between mb-3">
-            <h2 className="text-sm font-semibold text-gray-700">Spending vs budget</h2>
-            {totalBudget > 0 && (
-              <span className={`text-xs font-medium ${overBudget ? 'text-red-600' : 'text-gray-500'}`}>
-                {overBudget ? 'Over' : 'Remaining'}: ${Math.abs(remaining).toLocaleString()}
-              </span>
+            {isDirty && !saving && (
+              <p className="text-xs text-amber-600 mt-2">Unsaved changes</p>
             )}
-          </div>
-
-          {totalBudget > 0 ? (
-            <>
-              <div className="h-3 bg-gray-100 rounded-full overflow-hidden relative">
-                <div
-                  className={`h-full transition-all duration-500 ${overBudget ? 'bg-red-500' : 'bg-indigo-500'}`}
-                  style={{ width: `${usedPct}%` }}
-                />
-              </div>
-              <div className="flex justify-between text-xs text-gray-500 mt-2">
-                <span>${totalSpent.toLocaleString()} spent</span>
-                <span>${totalBudget.toLocaleString()} budget</span>
-              </div>
-            </>
-          ) : (
-            <p className="text-sm text-gray-400 italic">
-              Set a total budget on the trip to track usage.
-            </p>
-          )}
-
-          <div className="grid grid-cols-3 lg:grid-cols-6 gap-4 mt-6 pt-5 border-t border-gray-100 text-center">
-            <div>
-              <p className="text-xs text-gray-400">Categories</p>
-              <p className="text-base font-semibold text-gray-800">
-                ${liveBreakdown.toLocaleString()}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-400">Activities</p>
-              <p className="text-base font-semibold text-gray-800">
-                ${activitiesTotal.toLocaleString()}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-400">Lodging</p>
-              <p className="text-base font-semibold text-gray-800">
-                ${lodgingTotal.toLocaleString()}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-400">Reservations</p>
-              <p className="text-base font-semibold text-gray-800">
-                ${reservationsTotal.toLocaleString()}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-400">Expenses</p>
-              <p className="text-base font-semibold text-gray-800">
-                ${expensesTotal.toLocaleString()}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-400">Total spend</p>
-              <p className={`text-base font-bold ${overBudget ? 'text-red-600' : 'text-indigo-600'}`}>
-                ${totalSpent.toLocaleString()}
-              </p>
-            </div>
           </div>
         </div>
 
