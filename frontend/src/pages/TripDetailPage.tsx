@@ -126,6 +126,25 @@ function getTravelInfo(from: Stop, to: Stop): TravelInfo | null {
   return { km, driveLabel, flyLabel, mapsUrl };
 }
 
+function buildRouteExportUrls(stops: Stop[]): { google: string; apple: string } | null {
+  const mapped = stops
+    .map(s => ({ ...s, lat: Number(s.latitude), lng: Number(s.longitude) }))
+    .filter(s => isFinite(s.lat) && isFinite(s.lng));
+  if (mapped.length < 2) return null;
+
+  // Google Maps: /dir/City+Country/.../City+Country (up to 10 stops)
+  const capped = mapped.slice(0, 10);
+  const segments = capped.map(s => encodeURIComponent(`${s.city_name}, ${s.country}`)).join('/');
+  const google = `https://www.google.com/maps/dir/${segments}`;
+
+  // Apple Maps: origin → final destination (Apple Maps URLs don't support multi-waypoints)
+  const first = mapped[0];
+  const last  = mapped[mapped.length - 1];
+  const apple = `https://maps.apple.com/?saddr=${encodeURIComponent(`${first.city_name}, ${first.country}`)}&daddr=${encodeURIComponent(`${last.city_name}, ${last.country}`)}&dirflg=d`;
+
+  return { google, apple };
+}
+
 function TravelConnector({ info, fromCity, toCity }: { info: TravelInfo; fromCity: string; toCity: string }) {
   const kmLabel = info.km >= 1000
     ? `${(info.km / 1000).toFixed(1)}k km`
@@ -272,6 +291,7 @@ export default function TripDetailPage() {
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
   const [stopModalOpen, setStopModalOpen]         = useState(false);
   const [activityModalStop, setActivityModalStop] = useState<Stop | null>(null);
+  const [showExportMenu, setShowExportMenu]       = useState(false);
   const [savingShare, setSavingShare] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
   const [inviteEmail, setInviteEmail] = useState('');
@@ -587,6 +607,55 @@ export default function TripDetailPage() {
                 📅 Calendar
               </button>
             </div>
+            {/* Export route dropdown */}
+            {(() => {
+              const exportUrls = buildRouteExportUrls(stops);
+              if (!exportUrls) return null;
+              return (
+                <div className="relative">
+                  <button
+                    onClick={() => setShowExportMenu(v => !v)}
+                    className="flex items-center gap-1.5 text-xs font-medium text-gray-600 border border-gray-300 hover:border-indigo-400 hover:text-indigo-600 px-3 py-2 rounded-lg transition"
+                  >
+                    🗺️ Export Route
+                  </button>
+                  {showExportMenu && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setShowExportMenu(false)} />
+                      <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-gray-200 rounded-xl shadow-lg py-1 w-52 text-sm">
+                        <a
+                          href={exportUrls.google}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => setShowExportMenu(false)}
+                          className="flex items-center gap-2.5 px-4 py-2.5 hover:bg-gray-50 transition text-gray-700"
+                        >
+                          <span className="text-base">🌐</span>
+                          <div>
+                            <p className="font-medium">Google Maps</p>
+                            <p className="text-xs text-gray-400">{stops.length} stop{stops.length !== 1 ? 's' : ''} · full route</p>
+                          </div>
+                        </a>
+                        <a
+                          href={exportUrls.apple}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => setShowExportMenu(false)}
+                          className="flex items-center gap-2.5 px-4 py-2.5 hover:bg-gray-50 transition text-gray-700"
+                        >
+                          <span className="text-base">🍎</span>
+                          <div>
+                            <p className="font-medium">Apple Maps</p>
+                            <p className="text-xs text-gray-400">Start → end destination</p>
+                          </div>
+                        </a>
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })()}
+
             <button
               onClick={() => setStopModalOpen(true)}
               className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition"
