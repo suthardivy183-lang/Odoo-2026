@@ -82,5 +82,12 @@ const PORT = process.env.PORT || 3001;
 
 httpServer.listen(PORT, async () => {
   logger.info(`Server running on http://localhost:${PORT}`);
-  await testConnection();
+  try {
+    await testConnection();
+  } catch (err) {
+    logger.error(
+      'PostgreSQL connection failed. API routes that use the database will fail until PostgreSQL is running.',
+      err
+    );
+  }
 });
