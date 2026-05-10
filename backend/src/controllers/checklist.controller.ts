@@ -3,7 +3,7 @@ import { AuthRequest } from '../middleware/auth';
 import { createChecklistSchema, updateChecklistSchema } from '../validators/checklist.validator';
 import {
   getChecklist, addChecklistItem, updateChecklistItem,
-  toggleChecklistItem, deleteChecklistItem,
+  toggleChecklistItem, deleteChecklistItem, resetChecklist,
 } from '../services/checklist.service';
 
 export const list = async (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -46,5 +46,12 @@ export const remove = async (req: AuthRequest, res: Response, next: NextFunction
       req.params.tripId as string, req.params.itemId as string, req.user!.id
     );
     res.json({ success: true, message: 'Item removed' });
+  } catch (err) { next(err); }
+};
+
+export const reset = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    await resetChecklist(req.params.tripId as string, req.user!.id);
+    res.json({ success: true, message: 'Checklist reset — all items marked as unpacked' });
   } catch (err) { next(err); }
 };

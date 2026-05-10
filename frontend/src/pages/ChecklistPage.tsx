@@ -33,6 +33,10 @@ export default function ChecklistPage() {
   const [newCategory, setNewCategory] = useState<Item['category']>('other');
   const [adding,      setAdding]      = useState(false);
 
+  // Reset state
+  const [showReset,  setShowReset]  = useState(false);
+  const [resetting,  setResetting]  = useState(false);
+
   useEffect(() => {
     if (!id) return;
     Promise.all([
@@ -87,6 +91,20 @@ export default function ChecklistPage() {
     }
   };
 
+  const handleReset = async () => {
+    setResetting(true);
+    try {
+      await api.patch(`/api/trips/${id}/checklist/reset`);
+      setItems(prev => prev.map(i => ({ ...i, is_packed: false })));
+      setShowReset(false);
+    } catch {
+      const r = await api.get(`/api/trips/${id}/checklist`);
+      setItems(r.data.data.items);
+    } finally {
+      setResetting(false);
+    }
+  };
+
   const handleDelete = async (itemId: string) => {
     setItems(prev => prev.filter(i => i.id !== itemId));
     try {
@@ -120,7 +138,17 @@ export default function ChecklistPage() {
           </Link>
         </div>
 
-        <h1 className="text-2xl font-bold text-gray-800 mb-6">Packing Checklist</h1>
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold text-gray-800">Packing Checklist</h1>
+          {items.length > 0 && (
+            <button
+              onClick={() => setShowReset(true)}
+              className="text-sm px-3 py-1.5 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 transition"
+            >
+              🔄 Reset
+            </button>
+          )}
+        </div>
 
         {err && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">{err}</div>
@@ -231,6 +259,33 @@ export default function ChecklistPage() {
           </div>
         )}
       </main>
+
+      {/* Reset confirm modal */}
+      {showReset && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
+            <h3 className="text-lg font-bold text-gray-800 mb-2">Reset checklist?</h3>
+            <p className="text-sm text-gray-500 mb-5">
+              This will mark all {items.length} items as unpacked. Your items won't be deleted — only the packed status is cleared.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowReset(false)}
+                className="flex-1 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleReset}
+                disabled={resetting}
+                className="flex-1 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition"
+              >
+                {resetting ? 'Resetting…' : 'Yes, reset'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

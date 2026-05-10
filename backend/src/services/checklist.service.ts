@@ -98,3 +98,11 @@ export const deleteChecklistItem = async (
   );
   if (!rowCount) throw makeErr('Checklist item not found', 404);
 };
+
+export const resetChecklist = async (tripId: string, userId: string) => {
+  await verifyTripOwner(tripId, userId);
+  await pool.query(
+    `UPDATE trip_checklist SET is_packed = FALSE, updated_at = NOW() WHERE trip_id = $1`,
+    [tripId]
+  );
+};
