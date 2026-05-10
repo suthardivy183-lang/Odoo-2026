@@ -5,6 +5,7 @@ import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import { errorHandler } from './middleware/errorHandler';
 import { logger } from './utils/logger';
+import { testConnection } from './database/pool';
 
 dotenv.config();
 
@@ -27,9 +28,9 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Routes will be added here
-// app.use('/api/auth', authRoutes);
-// app.use('/api/users', userRoutes);
+// Routes
+import authRoutes from './routes/auth.routes';
+app.use('/api/auth', authRoutes);
 
 // Socket.IO events
 io.on('connection', (socket) => {
@@ -45,6 +46,7 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, async () => {
   logger.info(`Server running on http://localhost:${PORT}`);
+  await testConnection();
 });
