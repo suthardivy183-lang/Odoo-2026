@@ -91,6 +91,52 @@ type MappedStop = Stop & {
   lng: number;
 };
 
+type RouteLeg = {
+  fromStopId: string;
+  toStopId: string;
+  distanceKm: number;
+};
+
+const toRadians = (value: number) => (value * Math.PI) / 180;
+
+const stopDistanceKm = (a: MappedStop, b: MappedStop) => {
+  const earthRadiusKm = 6371;
+  const dLat = toRadians(b.lat - a.lat);
+  const dLng = toRadians(b.lng - a.lng);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRadians(a.lat)) * Math.cos(toRadians(b.lat)) *
+    Math.sin(dLng / 2) ** 2;
+
+  return 2 * earthRadiusKm * Math.asin(Math.sqrt(h));
+};
+
+const getMappedStops = (stops: Stop[]) => stops
+  .map(stop => ({
+    ...stop,
+    lat: Number(stop.latitude),
+    lng: Number(stop.longitude),
+  }))
+  .filter((stop): stop is MappedStop => Number.isFinite(stop.lat) && Number.isFinite(stop.lng));
+
+const getRouteStats = (stops: Stop[]) => {
+  const mappedStops = getMappedStops(stops);
+  const legs: RouteLeg[] = mappedStops.slice(1).map((stop, index) => ({
+    fromStopId: mappedStops[index].id,
+    toStopId: stop.id,
+    distanceKm: stopDistanceKm(mappedStops[index], stop),
+  }));
+
+  return {
+    mappedStops,
+    unmappedCount: stops.length - mappedStops.length,
+    totalKm: legs.reduce((total, leg) => total + leg.distanceKm, 0),
+    legs,
+  };
+};
+
+const formatKm = (value: number) => `${Math.round(value).toLocaleString()} km`;
+
 function FitMapToStops({ stops }: { stops: MappedStop[] }) {
   const map = useMap();
 
@@ -109,16 +155,7 @@ function FitMapToStops({ stops }: { stops: MappedStop[] }) {
 }
 
 function ItineraryMap({ stops }: { stops: Stop[] }) {
-  const mappedStops = useMemo(
-    () => stops
-      .map(stop => ({
-        ...stop,
-        lat: Number(stop.latitude),
-        lng: Number(stop.longitude),
-      }))
-      .filter((stop): stop is MappedStop => Number.isFinite(stop.lat) && Number.isFinite(stop.lng)),
-    [stops]
-  );
+  const { mappedStops, totalKm, unmappedCount } = useMemo(() => getRouteStats(stops), [stops]);
 
   const route: LatLngExpression[] = mappedStops.map(stop => [stop.lat, stop.lng]);
   const center: LatLngExpression = mappedStops.length
@@ -130,10 +167,13 @@ function ItineraryMap({ stops }: { stops: Stop[] }) {
       <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
         <div>
           <h2 className="text-sm font-semibold text-gray-800">Route map</h2>
-          <p className="text-xs text-gray-400">{mappedStops.length} mapped stop{mappedStops.length !== 1 ? 's' : ''}</p>
+          <p className="text-xs text-gray-400">
+            {mappedStops.length} mapped stop{mappedStops.length !== 1 ? 's' : ''}
+            {unmappedCount > 0 ? `, ${unmappedCount} without coordinates` : ''}
+          </p>
         </div>
         {mappedStops.length > 1 && (
-          <span className="text-xs font-medium text-indigo-600">Ordered path</span>
+          <span className="text-xs font-medium text-indigo-600">{formatKm(totalKm)}</span>
         )}
       </div>
 
@@ -194,6 +234,8 @@ export default function TripDetailPage() {
   const [stopModalOpen, setStopModalOpen]         = useState(false);
   const [activityModalStop, setActivityModalStop] = useState<Stop | null>(null);
   const [savingShare, setSavingShare] = useState(false);
+  const [optimizingRoute, setOptimizingRoute] = useState(false);
+  const [routeMessage, setRouteMessage] = useState('');
   const [members, setMembers] = useState<Member[]>([]);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteError, setInviteError] = useState('');
@@ -288,6 +330,28 @@ export default function TripDetailPage() {
     }
   };
 
+  const handleOptimizeRoute = async () => {
+    if (!id) return;
+    setOptimizingRoute(true);
+    setRouteMessage('');
+    try {
+      const res = await api.post(`/api/trips/${id}/stops/optimize`);
+      setStops(res.data.data.stops);
+      const saved = Number(res.data.data.saved_km || 0);
+      const after = Number(res.data.data.after_km || 0);
+      const scheduleMessage = res.data.data.schedule_message;
+      setRouteMessage(saved > 0
+        ? `Optimized route: saved about ${saved.toLocaleString()} km. New route is ${after.toLocaleString()} km. ${scheduleMessage}`
+        : `Route checked. Current order is already near optimal at ${after.toLocaleString()} km. ${scheduleMessage}`
+      );
+      await loadAll();
+    } catch (e: any) {
+      setRouteMessage(e.response?.data?.message || 'Failed to optimize route');
+    } finally {
+      setOptimizingRoute(false);
+    }
+  };
+
   const inviteMember = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inviteEmail.trim()) return;
@@ -323,6 +387,11 @@ export default function TripDetailPage() {
   const totalActivityCost = Object.values(stopActivities)
     .flat()
     .reduce((s, a) => s + Number(a.effective_cost || 0), 0);
+  const routeStats = useMemo(() => getRouteStats(stops), [stops]);
+  const routeLegByFromStop = useMemo(
+    () => new Map(routeStats.legs.map(leg => [leg.fromStopId, leg])),
+    [routeStats.legs]
+  );
 
   if (loading) {
     return (
@@ -490,15 +559,54 @@ export default function TripDetailPage() {
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(360px,520px)] gap-6 items-start">
           <section>
         {/* Itinerary */}
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
           <h2 className="text-lg font-semibold text-gray-800">Itinerary</h2>
-          <button
-            onClick={() => setStopModalOpen(true)}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition"
-          >
-            + Add Stop
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={handleOptimizeRoute}
+              disabled={optimizingRoute || stops.length < 3 || routeStats.mappedStops.length < stops.length}
+              className="border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:text-gray-300 disabled:border-gray-200 disabled:hover:bg-white text-sm font-semibold px-4 py-2 rounded-lg transition"
+              title={routeStats.mappedStops.length < stops.length ? 'Every stop needs map coordinates before optimization' : undefined}
+            >
+              {optimizingRoute ? 'Optimizing...' : 'Optimize route'}
+            </button>
+            <button
+              onClick={() => setStopModalOpen(true)}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition"
+            >
+              + Add Stop
+            </button>
+          </div>
         </div>
+
+        {routeMessage && (
+          <div className={`mb-4 px-3 py-2 rounded-lg border text-sm ${
+            routeMessage.startsWith('Failed') || routeMessage.startsWith('Add')
+              ? 'bg-red-50 border-red-100 text-red-600'
+              : 'bg-indigo-50 border-indigo-100 text-indigo-700'
+          }`}>
+            {routeMessage}
+          </div>
+        )}
+
+        {stops.length > 1 && (
+          <div className="mb-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="bg-white border border-gray-200 rounded-xl px-4 py-3">
+              <p className="text-xs text-gray-400">Route distance</p>
+              <p className="text-lg font-semibold text-gray-800">{formatKm(routeStats.totalKm)}</p>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-xl px-4 py-3">
+              <p className="text-xs text-gray-400">Distance legs</p>
+              <p className="text-lg font-semibold text-gray-800">{routeStats.legs.length}</p>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-xl px-4 py-3">
+              <p className="text-xs text-gray-400">Optimizer status</p>
+              <p className={`text-sm font-semibold mt-1 ${routeStats.unmappedCount ? 'text-amber-600' : 'text-emerald-600'}`}>
+                {routeStats.unmappedCount ? `${routeStats.unmappedCount} stop needs coordinates` : 'Ready'}
+              </p>
+            </div>
+          </div>
+        )}
 
         {stops.length === 0 && (
           <div className="bg-white rounded-2xl border border-gray-200 py-16 text-center">
@@ -576,6 +684,14 @@ export default function TripDetailPage() {
                   </div>
                 </div>
               </div>
+              {routeLegByFromStop.has(stop.id) && (
+                <div className="px-5 py-3 border-t border-gray-100 bg-gray-50 text-xs text-gray-500 flex items-center justify-between gap-3">
+                  <span>Distance to next stop</span>
+                  <span className="font-semibold text-gray-700">
+                    {formatKm(routeLegByFromStop.get(stop.id)!.distanceKm)}
+                  </span>
+                </div>
+              )}
             </div>
           ))}
         </div>

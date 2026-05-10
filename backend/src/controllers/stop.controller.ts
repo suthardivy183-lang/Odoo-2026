@@ -1,7 +1,7 @@
 import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { addStopSchema, updateStopSchema, reorderSchema } from '../validators/stop.validator';
-import { addStop, getStops, updateStop, deleteStop, reorderStops } from '../services/stop.service';
+import { addStop, getStops, updateStop, deleteStop, reorderStops, optimizeStops } from '../services/stop.service';
 
 export const add = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
@@ -46,5 +46,14 @@ export const reorder = async (req: AuthRequest, res: Response, next: NextFunctio
     const io = req.app.get('io');
     io?.to(`trip:${req.params.tripId}`).emit('trip:changed', { tripId: req.params.tripId, resource: 'stops' });
     res.json({ success: true, data: { stops } });
+  } catch (err) { next(err); }
+};
+
+export const optimize = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const result = await optimizeStops(req.params.tripId as string, req.user!.id);
+    const io = req.app.get('io');
+    io?.to(`trip:${req.params.tripId}`).emit('trip:changed', { tripId: req.params.tripId, resource: 'stops' });
+    res.json({ success: true, data: result });
   } catch (err) { next(err); }
 };
