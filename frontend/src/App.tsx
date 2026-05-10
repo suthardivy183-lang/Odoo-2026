@@ -9,7 +9,8 @@ import CitiesPage      from './pages/CitiesPage';
 import CityDetailPage  from './pages/CityDetailPage';
 import BudgetPage      from './pages/BudgetPage';
 import ChecklistPage   from './pages/ChecklistPage';
-import NotesPage       from './pages/NotesPage';
+import NotesPage          from './pages/NotesPage';
+import ReservationsPage   from './pages/ReservationsPage';
 import SharePage       from './pages/SharePage';
 import ProfilePage        from './pages/ProfilePage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
@@ -39,9 +40,10 @@ export default function App() {
       <Route path="/cities"     element={<P><CitiesPage /></P>} />
       <Route path="/cities/:id" element={<P><CityDetailPage /></P>} />
 
-      <Route path="/trips/:id/budget"    element={<P><BudgetPage /></P>} />
-      <Route path="/trips/:id/checklist" element={<P><ChecklistPage /></P>} />
-      <Route path="/trips/:id/notes"     element={<P><NotesPage /></P>} />
+      <Route path="/trips/:id/budget"       element={<P><BudgetPage /></P>} />
+      <Route path="/trips/:id/checklist"   element={<P><ChecklistPage /></P>} />
+      <Route path="/trips/:id/notes"       element={<P><NotesPage /></P>} />
+      <Route path="/trips/:id/reservations" element={<P><ReservationsPage /></P>} />
 
       <Route path="/profile" element={<P><ProfilePage /></P>} />
 

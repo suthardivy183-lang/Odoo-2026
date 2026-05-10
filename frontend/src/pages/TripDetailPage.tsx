@@ -775,7 +775,7 @@ export default function TripDetailPage() {
 
         {/* Sub-navigation to other trip-scoped pages */}
         {stops.length > 0 && (
-          <div className="mt-10 grid grid-cols-3 gap-3">
+          <div className="mt-10 grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Link to={`/trips/${id}/budget`} className="bg-white rounded-xl border border-gray-200 p-4 text-center hover:shadow-md transition">
               <p className="text-2xl">💰</p>
               <p className="text-xs font-medium text-gray-700 mt-1">Budget</p>
@@ -787,6 +787,10 @@ export default function TripDetailPage() {
             <Link to={`/trips/${id}/notes`} className="bg-white rounded-xl border border-gray-200 p-4 text-center hover:shadow-md transition">
               <p className="text-2xl">📝</p>
               <p className="text-xs font-medium text-gray-700 mt-1">Notes</p>
+            </Link>
+            <Link to={`/trips/${id}/reservations`} className="bg-white rounded-xl border border-gray-200 p-4 text-center hover:shadow-md transition">
+              <p className="text-2xl">🎫</p>
+              <p className="text-xs font-medium text-gray-700 mt-1">Reservations</p>
             </Link>
           </div>
         )}
