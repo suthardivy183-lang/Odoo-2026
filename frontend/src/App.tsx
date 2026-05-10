@@ -7,6 +7,7 @@ import CreateTripPage  from './pages/CreateTripPage';
 import TripDetailPage  from './pages/TripDetailPage';
 import CitiesPage      from './pages/CitiesPage';
 import CityDetailPage  from './pages/CityDetailPage';
+import BudgetPage      from './pages/BudgetPage';
 import ProtectedRoute  from './components/ProtectedRoute';
 
 const P = ({ children }: { children: React.ReactNode }) => (
@@ -26,6 +27,8 @@ export default function App() {
 
       <Route path="/cities"     element={<P><CitiesPage /></P>} />
       <Route path="/cities/:id" element={<P><CityDetailPage /></P>} />
+
+      <Route path="/trips/:id/budget"  element={<P><BudgetPage /></P>} />
 
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
