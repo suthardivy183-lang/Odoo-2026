@@ -47,7 +47,7 @@ export const addStop = async (tripId: string, userId: string, input: AddStopInpu
   // Return stop with city info
   const stop = rows[0];
   const cityRes = await pool.query(
-    `SELECT id, name, country, region, cost_index, image_url FROM cities WHERE id = $1`,
+    `SELECT id, name, country, region, cost_index, image_url, latitude, longitude FROM cities WHERE id = $1`,
     [stop.city_id]
   );
   return { ...stop, city: cityRes.rows[0] };
@@ -58,7 +58,7 @@ export const getStops = async (tripId: string, userId: string) => {
 
   const { rows } = await pool.query(
     `SELECT ts.*,
-            c.name AS city_name, c.country, c.region, c.cost_index, c.image_url,
+            c.name AS city_name, c.country, c.region, c.cost_index, c.image_url, c.latitude, c.longitude,
             COUNT(sa.id)::int AS activity_count
      FROM trip_stops ts
      JOIN cities c ON c.id = ts.city_id

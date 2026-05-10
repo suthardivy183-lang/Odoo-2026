@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { CircleMarker, MapContainer, Polyline, Popup, TileLayer, useMap } from 'react-leaflet';
+import type { LatLngBoundsExpression, LatLngExpression } from 'leaflet';
 import Navbar from '../components/Navbar';
 import Modal from '../components/Modal';
 import api from '../services/api';
@@ -61,6 +63,8 @@ interface Stop {
   departure_date: string;
   notes?: string;
   activity_count: number;
+  latitude?: string | number | null;
+  longitude?: string | number | null;
 }
 
 interface Activity {
@@ -81,6 +85,103 @@ const TYPE_EMOJI: Record<string, string> = {
   sightseeing: '🏛️', food: '🍽️', adventure: '🧗', culture: '🎭',
   shopping: '🛍️', nightlife: '🌃', nature: '🌳', wellness: '🧘',
 };
+
+type MappedStop = Stop & {
+  lat: number;
+  lng: number;
+};
+
+function FitMapToStops({ stops }: { stops: MappedStop[] }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (stops.length === 0) return;
+    if (stops.length === 1) {
+      map.setView([stops[0].lat, stops[0].lng], 7);
+      return;
+    }
+
+    const bounds: LatLngBoundsExpression = stops.map(stop => [stop.lat, stop.lng]);
+    map.fitBounds(bounds, { padding: [36, 36], maxZoom: 7 });
+  }, [map, stops]);
+
+  return null;
+}
+
+function ItineraryMap({ stops }: { stops: Stop[] }) {
+  const mappedStops = useMemo(
+    () => stops
+      .map(stop => ({
+        ...stop,
+        lat: Number(stop.latitude),
+        lng: Number(stop.longitude),
+      }))
+      .filter((stop): stop is MappedStop => Number.isFinite(stop.lat) && Number.isFinite(stop.lng)),
+    [stops]
+  );
+
+  const route: LatLngExpression[] = mappedStops.map(stop => [stop.lat, stop.lng]);
+  const center: LatLngExpression = mappedStops.length
+    ? [mappedStops[0].lat, mappedStops[0].lng]
+    : [20, 0];
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-gray-800">Route map</h2>
+          <p className="text-xs text-gray-400">{mappedStops.length} mapped stop{mappedStops.length !== 1 ? 's' : ''}</p>
+        </div>
+        {mappedStops.length > 1 && (
+          <span className="text-xs font-medium text-indigo-600">Ordered path</span>
+        )}
+      </div>
+
+      <div className="h-[360px] lg:h-[calc(100vh-13rem)] min-h-[320px]">
+        {mappedStops.length > 0 ? (
+          <MapContainer
+            center={center}
+            zoom={mappedStops.length === 1 ? 7 : 3}
+            scrollWheelZoom
+            className="h-full w-full"
+          >
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+            <FitMapToStops stops={mappedStops} />
+            {route.length > 1 && (
+              <Polyline positions={route} pathOptions={{ color: '#4f46e5', weight: 3, opacity: 0.75 }} />
+            )}
+            {mappedStops.map((stop, index) => (
+              <CircleMarker
+                key={stop.id}
+                center={[stop.lat, stop.lng]}
+                radius={11}
+                pathOptions={{ color: '#312e81', fillColor: '#4f46e5', fillOpacity: 0.95, weight: 2 }}
+              >
+                <Popup>
+                  <div className="min-w-40">
+                    <p className="font-semibold">{index + 1}. {stop.city_name}</p>
+                    <p className="text-xs text-gray-500">{stop.country}</p>
+                    <p className="text-xs text-gray-500">{fmtDate(stop.arrival_date)} to {fmtDate(stop.departure_date)}</p>
+                  </div>
+                </Popup>
+              </CircleMarker>
+            ))}
+          </MapContainer>
+        ) : (
+          <div className="h-full flex items-center justify-center bg-gray-50 text-center px-6">
+            <div>
+              <p className="text-sm font-semibold text-gray-600">No mapped stops yet</p>
+              <p className="text-xs text-gray-400 mt-1">Add a city stop and it will appear here.</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function TripDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -253,7 +354,7 @@ export default function TripDetailPage() {
     <div className="min-h-screen bg-gray-50">
       <Navbar />
 
-      <main className="max-w-4xl mx-auto px-4 py-8">
+      <main className="max-w-7xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-2">
           <Link to="/trips" className="text-sm text-gray-400 hover:text-gray-600 transition">← My Trips</Link>
@@ -387,6 +488,8 @@ export default function TripDetailPage() {
           </div>
         )}
 
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(360px,520px)] gap-6 items-start">
+          <section>
         {/* Itinerary header + view toggle */}
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-gray-800">Itinerary</h2>
@@ -525,6 +628,12 @@ export default function TripDetailPage() {
             </Link>
           </div>
         )}
+          </section>
+
+          <aside className="order-first lg:order-none lg:sticky lg:top-24">
+            <ItineraryMap stops={stops} />
+          </aside>
+        </div>
       </main>
 
       {/* Add Stop Modal */}
