@@ -1,151 +1,250 @@
-# Traveloop
+<div align="center">
 
-A full-stack travel planning app for the Odoo × Parul University Hackathon 2026.
-Plan trips, build itineraries with stops and activities, track budget, manage
-packing checklists, jot down notes, and share trips publicly via a slug URL.
+# ✈️ Traveloop
 
-Live updates are pushed over Socket.io so multiple clients viewing the same trip
-stay in sync.
+### Real-Time Collaborative Travel Planning Platform
+
+*Built for the Odoo × Parul University Hackathon 2026*
+
+[![React](https://img.shields.io/badge/React-19-61dafb?style=flat-square&logo=react)](https://react.dev)
+[![Node.js](https://img.shields.io/badge/Node.js-20+-339933?style=flat-square&logo=node.js)](https://nodejs.org)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-4169e1?style=flat-square&logo=postgresql)](https://postgresql.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?style=flat-square&logo=typescript)](https://typescriptlang.org)
+[![Socket.io](https://img.shields.io/badge/Socket.io-4-010101?style=flat-square&logo=socket.io)](https://socket.io)
+
+</div>
+
+---
+
+## Overview
+
+**Traveloop** is a full-stack, real-time travel planning application that lets individuals and groups plan, organize, and collaborate on trips from a single unified platform. From building multi-stop itineraries and optimizing routes to splitting expenses and tracking budgets — every feature is designed to eliminate travel planning friction.
+
+Live updates are pushed over Socket.io, so all collaborators viewing the same trip see changes instantly with no page refresh.
+
+---
 
 ## Features
 
-1. User registration and login with JWT authentication
-2. Protected API routes for authenticated travelers
-3. City discovery with seeded destination data
-4. Activity browsing by city and activity type
-5. Trip creation, editing, listing, and deletion
-6. Ordered trip stops with arrival and departure dates
-7. Stop-level activity planning and scheduling
-8. Public trip sharing with generated public slugs
-9. Trip budget tracking across transport, accommodation, meals, and miscellaneous costs
-10. Packing checklist management with categories and packed status
-11. Trip notes and journal entries
-12. Realtime server support with Socket.io
-13. Request validation with Zod schemas
-14. In-memory API rate limiting for basic abuse protection
+### Core Planning
+| Feature | Description |
+|---|---|
+| 🗺️ **Multi-stop Itineraries** | Build ordered trip stops with arrival/departure dates and notes |
+| 📅 **Calendar & List Views** | Visualize your trip day-by-day or as a scrollable list |
+| 🗓️ **Date Conflict Detection** | Prevents overlapping stops with real-time validation |
+| 🏙️ **City Discovery** | Browse 25+ seeded destinations with popularity scores and cost indices |
+| 🎯 **Activity Planning** | Add activities per stop with scheduling, duration, and cost tracking |
+
+### Routing & Maps
+| Feature | Description |
+|---|---|
+| 📍 **Interactive Map** | Live route visualization using OpenStreetMap (no API key required) |
+| 📏 **Distance & Travel Time** | Haversine great-circle distance + estimated flight time between stops |
+| 🔀 **Route Optimization** | Nearest-neighbor + 2-opt algorithm minimizes total travel distance |
+| 🗺️ **Maps Export** | One-click export to Google Maps or Apple Maps |
+
+### Budget & Finance
+| Feature | Description |
+|---|---|
+| 💰 **Unified Budget Dashboard** | Donut chart aggregating activities, lodging, reservations, meals, and expenses |
+| 🏨 **Lodging Management** | Track nightly rates, check-in/out dates auto-calculated |
+| 🎫 **Reservation Tracking** | Log flights, hotels, trains, car rentals with booking references |
+| 💸 **Group Expense Splitting** | Split costs across trip members with balance tracking |
+| 💱 **Multi-Currency Support** | 40+ ISO 4217 currencies with exchange rate conversion |
+
+### Collaboration & Organization
+| Feature | Description |
+|---|---|
+| ⚡ **Real-Time Sync** | Socket.io per-trip rooms broadcast every change instantly |
+| 👥 **Trip Members** | Invite collaborators with editor roles |
+| ✅ **Packing Checklists** | Grouped checklist with packed/unpacked status |
+| 📝 **Trip Notes** | Rich notes per trip or per stop |
+| 🌐 **Public Sharing** | Share read-only trip itineraries via generated slug URLs |
+
+---
 
 ## Tech Stack
 
-- **Frontend**: React 19 + Vite + TypeScript + Tailwind CSS 4 + React Router
-- **Backend**: Node.js + Express + TypeScript
-- **Database**: PostgreSQL 15 (UUID PKs, indexed FKs, `updated_at` triggers)
-- **Real-time**: Socket.io (per-trip rooms)
-- **Validation**: Zod on every endpoint
-- **Auth**: JWT + bcrypt (12 salt rounds)
+```
+Frontend                    Backend                     Infrastructure
+─────────────────────────   ─────────────────────────   ──────────────────
+React 19 + Vite             Node.js 20 + Express        PostgreSQL 15
+TypeScript 5                TypeScript 5                38 indexes
+Tailwind CSS 4              Zod (all endpoints)         FK cascades
+React Router 6              JWT + bcrypt (12 rounds)    updated_at triggers
+React Leaflet               Socket.io rooms             UUID primary keys
+Axios + interceptors        Rate limiter (100/15min)    Transaction support
+```
 
-## Repository Layout
+---
+
+## Architecture
 
 ```
 Odoo-2026/
 ├── backend/
 │   ├── src/
-│   │   ├── routes/         # express routers, mounted in server.ts
-│   │   ├── controllers/    # parse req → call service → send response
-│   │   ├── services/       # business logic + SQL
-│   │   ├── validators/     # Zod schemas (one per resource)
-│   │   ├── middleware/     # auth, error handler
-│   │   ├── database/       # pool, migrations, seeds
-│   │   └── server.ts
+│   │   ├── routes/          # Express routers mounted in server.ts
+│   │   ├── controllers/     # Request parsing → service call → response
+│   │   ├── services/        # Business logic + SQL queries
+│   │   ├── validators/      # Zod schemas (one per resource)
+│   │   ├── middleware/      # JWT auth, error handler, rate limiter
+│   │   ├── database/        # Connection pool, migrations, seeds
+│   │   └── server.ts        # App entry, Socket.io setup, route mounting
 │   └── .env.example
+│
 ├── frontend/
 │   ├── src/
-│   │   ├── pages/          # one per route
-│   │   ├── components/     # reusable UI (Navbar, Modal, TripCard, ...)
-│   │   ├── context/        # AuthContext
-│   │   ├── services/       # api.ts (axios), socket.ts
-│   │   └── App.tsx         # route table
+│   │   ├── pages/           # One component per route
+│   │   ├── components/      # Navbar, Modal, TripCard, CityCard
+│   │   ├── context/         # AuthContext (JWT token management)
+│   │   ├── hooks/           # Custom React hooks
+│   │   ├── services/        # api.ts (Axios), socket.ts (Socket.io client)
+│   │   └── App.tsx          # Route table + protected route wrapper
 │   └── .env.example
+│
 └── README.md
 ```
 
-## Setup
+---
+
+## Getting Started
 
 ### Prerequisites
-
 - Node.js 20+
-- PostgreSQL 15+ running locally (or accessible via `DATABASE_URL`)
+- PostgreSQL 15+ (local or remote via `DATABASE_URL`)
 
-### Backend
+### Backend Setup
 
 ```bash
 cd backend
 cp .env.example .env
-# Edit .env: set DATABASE_URL and JWT_SECRET
+# Set DATABASE_URL and JWT_SECRET in .env
+
 npm install
-npm run migrate     # creates schema (001_init.sql)
-npm run seed        # loads 25 cities + 60 activities (002_seed.sql)
-npm run dev         # starts http://localhost:3001
+npm run migrate     # Runs all SQL migrations in order
+npm run seed        # Seeds 25 cities, 60 activities, lodging options
+npm run dev         # API server → http://localhost:3001
 ```
 
-### Frontend
+### Frontend Setup
 
 ```bash
 cd frontend
 cp .env.example .env
+# Set VITE_API_URL=http://localhost:3001
+
 npm install
-npm run dev         # starts http://localhost:5173
+npm run dev         # Dev server → http://localhost:5173
 ```
 
-Open http://localhost:5173, sign up, and start planning.
+Open [http://localhost:5173](http://localhost:5173), register an account, and start planning.
 
-## API Surface
+---
 
-All `/api/trips/*` and nested routes require `Authorization: Bearer <jwt>`.
+## API Reference
 
-| Method | Path                                                | Purpose                              |
-|--------|-----------------------------------------------------|--------------------------------------|
-| POST   | `/api/auth/register`                                | Create account, returns JWT          |
-| POST   | `/api/auth/login`                                   | Login, returns JWT                   |
-| GET    | `/api/auth/me`                                      | Current user                         |
-| GET    | `/api/trips` · `POST /api/trips`                    | List / create trips                  |
-| GET/PUT/DELETE | `/api/trips/:id`                            | Trip CRUD (auto-creates budget row)  |
-| GET/POST | `/api/trips/:id/stops` · `PATCH /reorder`         | Stops + reorder transaction          |
-| PUT/DELETE | `/api/trips/:id/stops/:stopId`                  | Update / delete stop                 |
-| GET    | `/api/cities` · `/api/cities/:id`                   | Browse cities + activities           |
-| GET    | `/api/activities` (public)                          | Filter by city, type, cost range     |
-| GET/POST/PUT/DELETE | `/api/trips/:id/stops/:stopId/activities` | Stop activities w/ effective cost    |
-| GET/PUT | `/api/trips/:id/budget`                            | Breakdown + computed totals          |
-| GET/POST/PUT/DELETE | `/api/trips/:id/checklist`             | Packing list + toggle endpoint       |
-| GET/POST/PUT/DELETE | `/api/trips/:id/notes`                 | Notes (general or per stop)          |
-| GET    | `/api/public/trips/:slug` (no auth)                 | Read-only shared itinerary           |
+> All `/api/trips/*` routes require `Authorization: Bearer <token>`
 
-### Socket.io events
+### Authentication
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/auth/register` | Register and receive JWT |
+| `POST` | `/api/auth/login` | Login and receive JWT |
+| `GET` | `/api/auth/me` | Fetch current user profile |
+| `POST` | `/api/auth/forgot-password` | Generate password reset token |
+| `POST` | `/api/auth/reset-password` | Reset password with token |
 
-- `trip:join` / `trip:leave` (client → server) — join a trip's broadcast room
-- `budget:updated` (server → room) — fired after every successful PUT to a trip's budget
+### Trips
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET / POST` | `/api/trips` | List or create trips |
+| `GET / PUT / DELETE` | `/api/trips/:id` | Read, update, or delete a trip |
+| `GET / POST` | `/api/trips/:id/stops` | List or add stops |
+| `PUT / DELETE` | `/api/trips/:id/stops/:stopId` | Update or remove a stop |
+| `POST` | `/api/trips/:id/stops/reorder` | Reorder stops (transactional) |
+| `POST` | `/api/trips/:id/stops/optimize` | Run route optimization |
+
+### Planning
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET / PUT` | `/api/trips/:id/budget` | View or update budget breakdown |
+| `GET / POST / DELETE` | `/api/trips/:id/expenses` | Group expense tracking |
+| `GET / POST / PUT / DELETE` | `/api/trips/:id/reservations` | Flight, hotel, train reservations |
+| `GET / POST / PUT / DELETE` | `/api/trips/:id/lodgings` | Accommodation bookings |
+| `GET / POST / PUT / DELETE` | `/api/trips/:id/checklist` | Packing checklist items |
+| `GET / POST / PUT / DELETE` | `/api/trips/:id/notes` | Trip notes and journal |
+| `GET / POST / DELETE` | `/api/trips/:id/members` | Trip collaborators |
+
+### Discovery
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/cities` | Browse cities with filters |
+| `GET` | `/api/cities/:id` | City detail with activities |
+| `GET` | `/api/activities` | Filter activities by city, type, cost |
+| `GET` | `/api/public/trips/:slug` | Public read-only trip view (no auth) |
+
+### Real-Time Events (Socket.io)
+| Event | Direction | Description |
+|-------|-----------|-------------|
+| `trip:join` | Client → Server | Subscribe to a trip's broadcast room |
+| `trip:leave` | Client → Server | Unsubscribe from a trip room |
+| `budget:updated` | Server → Room | Fires after any budget change |
+| `expenses:updated` | Server → Room | Fires after any expense change |
+
+---
 
 ## Frontend Routes
 
-| Path                            | Auth | Page                      |
-|---------------------------------|------|---------------------------|
-| `/login`, `/signup`             | —    | Auth                      |
-| `/dashboard`                    | ✓    | Stats + recent trips      |
-| `/trips`                        | ✓    | All trips with filters    |
-| `/trips/new`                    | ✓    | Create trip form          |
-| `/trips/:id`                    | ✓    | Itinerary builder         |
-| `/trips/:id/budget`             | ✓    | Donut chart + categories  |
-| `/trips/:id/checklist`          | ✓    | Grouped packing list      |
-| `/trips/:id/notes`              | ✓    | Notes with stop filters   |
-| `/cities` · `/cities/:id`       | ✓    | Explore + city detail     |
-| `/share/:slug`                  | —    | Public read-only trip     |
+| Path | Auth | Page |
+|------|------|------|
+| `/login` · `/signup` | Public | Authentication |
+| `/dashboard` | ✓ | Stats overview + recent trips |
+| `/trips` | ✓ | Full trip list with filters |
+| `/trips/new` | ✓ | Trip creation wizard |
+| `/trips/:id` | ✓ | Itinerary builder (map, calendar, list) |
+| `/trips/:id/budget` | ✓ | Budget dashboard with donut chart |
+| `/trips/:id/reservations` | ✓ | Flight, hotel & transport reservations |
+| `/trips/:id/checklist` | ✓ | Grouped packing list |
+| `/trips/:id/notes` | ✓ | Notes with stop-level filtering |
+| `/cities` · `/cities/:id` | ✓ | Destination explorer |
+| `/share/:slug` | Public | Read-only shared itinerary |
 
-## Hackathon Constraints
+---
 
-- ✅ PostgreSQL only (no Firebase / Supabase)
-- ✅ No third-party APIs
-- ✅ Zod validation on every endpoint
-- ✅ JWT authentication with bcrypt password hashing
-- ✅ Real-time updates via Socket.io
-- ✅ Indexed schema (38 indexes), FK cascades, `updated_at` triggers
-- ✅ Modular routes / controllers / services / validators
-- ✅ In-memory rate limiter (100 req / 15 min per IP)
+## Hackathon Compliance
+
+| Requirement | Status |
+|---|---|
+| PostgreSQL only (no Firebase / Supabase / external DBs) | ✅ |
+| No third-party paid APIs | ✅ |
+| Zod input validation on every endpoint | ✅ |
+| JWT authentication with bcrypt (12 salt rounds) | ✅ |
+| Real-time updates via Socket.io | ✅ |
+| Optimized schema — 38 indexes, FK cascades, `updated_at` triggers | ✅ |
+| Modular architecture: routes → controllers → services → validators | ✅ |
+| Rate limiting — 100 requests / 15 min per IP | ✅ |
+| TypeScript across the full stack | ✅ |
+
+---
 
 ## Team
 
-- Shivam
-- Divy
-- Suthar
+| Name | Role |
+|------|------|
+| **Shivam** | Full-Stack Developer |
+| **Divy** | Full-Stack Developer |
+
+---
 
 ## Repository
 
-https://github.com/suthardivy183-lang/Odoo-2026
+[https://github.com/suthardivy183-lang/Odoo-2026](https://github.com/suthardivy183-lang/Odoo-2026)
+
+---
+
+<div align="center">
+
+Made with ☕ and ✈️ for **Odoo × Parul University Hackathon 2026**
+
+</div>
