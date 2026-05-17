@@ -114,31 +114,52 @@ Odoo-2026/
 - Node.js 20+
 - PostgreSQL 15+ (local or remote via `DATABASE_URL`)
 
-### Backend Setup
+### Quick Start (from root)
+
+```bash
+# 1. Install all dependencies in one command
+npm run install:all
+
+# 2. Copy and configure environment files
+cp backend/.env.example backend/.env    # Set DATABASE_URL and JWT_SECRET
+cp frontend/.env.example frontend/.env  # Set VITE_API_URL=http://localhost:3001
+
+# 3. Set up the database
+npm run migrate   # Runs all 8 migrations in order
+npm run seed      # Seeds cities, activities, and lodging options
+
+# 4. Start both servers
+npm run dev:backend   # → http://localhost:3001
+npm run dev:frontend  # → http://localhost:5173
+```
+
+Open [http://localhost:5173](http://localhost:5173), register an account, and start planning.
+
+### Manual Setup (per service)
+
+<details>
+<summary>Backend</summary>
 
 ```bash
 cd backend
 cp .env.example .env
-# Set DATABASE_URL and JWT_SECRET in .env
-
 npm install
-npm run migrate     # Runs all SQL migrations in order
-npm run seed        # Seeds 25 cities, 60 activities, lodging options
-npm run dev         # API server → http://localhost:3001
+npm run migrate
+npm run seed
+npm run dev
 ```
+</details>
 
-### Frontend Setup
+<details>
+<summary>Frontend</summary>
 
 ```bash
 cd frontend
 cp .env.example .env
-# Set VITE_API_URL=http://localhost:3001
-
 npm install
-npm run dev         # Dev server → http://localhost:5173
+npm run dev
 ```
-
-Open [http://localhost:5173](http://localhost:5173), register an account, and start planning.
+</details>
 
 ---
 

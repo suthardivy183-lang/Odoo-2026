@@ -8,16 +8,109 @@ html, body, #root {
 }
 
 body {
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  background-color: #fbf9f6; /* warm cream */
+  color: #1c1917;            /* stone-900 */
 }
 
+/* ─── Sunset & Sea theme ─────────────────────────────────────────
+   Brand primary = deep teal (ocean / sky / trust)
+   Accent        = sunset coral (warmth / adventure)
+   Surface       = warm cream + stone tones (vs cold gray)
+   --------------------------------------------------------------- */
 @theme {
-  --color-brand-50:  #eef2ff;
-  --color-brand-100: #e0e7ff;
-  --color-brand-500: #6366f1;
-  --color-brand-600: #4f46e5;
-  --color-brand-700: #4338ca;
+  /* Override "indigo" globally so every existing bg-indigo-*, text-indigo-*
+     etc. picks up the new ocean teal — instant brand harmony. */
+  --color-indigo-50:  #f0fdfa;
+  --color-indigo-100: #ccfbf1;
+  --color-indigo-200: #99f6e4;
+  --color-indigo-300: #5eead4;
+  --color-indigo-400: #2dd4bf;
+  --color-indigo-500: #14b8a6;
+  --color-indigo-600: #0d9488;
+  --color-indigo-700: #0f766e;
+  --color-indigo-800: #115e59;
+  --color-indigo-900: #134e4a;
+
+  /* Brand alias (use bg-brand-600 in new code) */
+  --color-brand-50:  #f0fdfa;
+  --color-brand-100: #ccfbf1;
+  --color-brand-200: #99f6e4;
+  --color-brand-300: #5eead4;
+  --color-brand-400: #2dd4bf;
+  --color-brand-500: #14b8a6;
+  --color-brand-600: #0d9488;
+  --color-brand-700: #0f766e;
+  --color-brand-800: #115e59;
+  --color-brand-900: #134e4a;
+
+  /* Sunset accent (callouts, highlights, hero gradients) */
+  --color-sunset-50:  #fff7ed;
+  --color-sunset-100: #ffedd5;
+  --color-sunset-200: #fed7aa;
+  --color-sunset-300: #fdba74;
+  --color-sunset-400: #fb923c;
+  --color-sunset-500: #f97316;
+  --color-sunset-600: #ea580c;
+  --color-sunset-700: #c2410c;
+
+  /* Warm cream surface */
+  --color-cream-50:  #fdfcfa;
+  --color-cream-100: #fbf9f6;
+  --color-cream-200: #f5f1ea;
+}
+
+/* Brand gradients */
+.bg-sunset-gradient {
+  background-image: linear-gradient(135deg, #fb923c 0%, #f43f5e 50%, #8b5cf6 100%);
+}
+.bg-ocean-gradient {
+  background-image: linear-gradient(135deg, #0d9488 0%, #0891b2 50%, #6366f1 100%);
+}
+.bg-aurora-gradient {
+  background-image: linear-gradient(135deg, #fdba74 0%, #fb7185 35%, #c084fc 70%, #5eead4 100%);
+}
+.text-gradient-sunset {
+  background-image: linear-gradient(135deg, #f97316, #f43f5e 50%, #8b5cf6);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.text-gradient-ocean {
+  background-image: linear-gradient(135deg, #0d9488, #0891b2 60%, #6366f1);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Soft warm shadows (replaces harsh black shadows) */
+.shadow-warm {
+  box-shadow: 0 1px 2px rgba(28, 25, 23, 0.04), 0 8px 24px -6px rgba(28, 25, 23, 0.08);
+}
+.shadow-warm-lg {
+  box-shadow: 0 4px 8px rgba(28, 25, 23, 0.06), 0 24px 48px -12px rgba(28, 25, 23, 0.12);
+}
+.shadow-glow-brand {
+  box-shadow: 0 0 0 1px rgba(13, 148, 136, 0.1), 0 8px 24px -8px rgba(13, 148, 136, 0.4);
+}
+.shadow-glow-sunset {
+  box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.1), 0 8px 24px -8px rgba(249, 115, 22, 0.4);
+}
+
+/* Subtle dotted background for hero sections */
+.bg-dotted {
+  background-image: radial-gradient(circle, rgba(13, 148, 136, 0.08) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Smooth lift animation for cards */
+.lift-on-hover {
+  transition: transform 240ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 240ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.lift-on-hover:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 28px -10px rgba(28, 25, 23, 0.18);
 }
